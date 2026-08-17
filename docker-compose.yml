@@ -1,0 +1,61 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Your_strong_Password123"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql_data:/var/opt/mssql
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  api:
+    build:
+      context: .
+      dockerfile: src/InvitationPlatform.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=InvitationPlatform;User Id=sa;Password=Your_strong_Password123;TrustServerCertificate=True"
+      Frontend__Url: "http://localhost:3000"
+      Frontend__ApiUrl: "http://localhost:5000"
+      Email__SmtpHost: mailpit
+      Email__SmtpPort: "1025"
+      Email__From: "noreply@yido.local"
+    ports:
+      - "5000:8080"
+    depends_on:
+      - sqlserver
+      - mailpit
+
+  worker:
+    build:
+      context: .
+      dockerfile: src/InvitationPlatform.Worker/Dockerfile
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=InvitationPlatform;User Id=sa;Password=Your_strong_Password123;TrustServerCertificate=True"
+      Email__SmtpHost: mailpit
+      Email__SmtpPort: "1025"
+    depends_on:
+      - sqlserver
+      - mailpit
+
+  web:
+    build:
+      context: .
+      dockerfile: src/InvitationPlatform.Web/Dockerfile
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:5000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  sql_data:

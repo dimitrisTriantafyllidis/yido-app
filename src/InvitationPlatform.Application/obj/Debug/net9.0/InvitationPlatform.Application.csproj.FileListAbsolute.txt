@@ -1,0 +1,15 @@
+C:\Source\Dev\PersonalDevelopment\YIDO\src\InvitationPlatform.Application\bin\Debug\net9.0\InvitationPlatform.Application.deps.json
+C:\Source\Dev\PersonalDevelopment\YIDO\src\InvitationPlatform.Application\bin\Debug\net9.0\InvitationPlatform.Application.dll
+C:\Source\Dev\PersonalDevelopment\YIDO\src\InvitationPlatform.Application\bin\Debug\net9.0\InvitationPlatform.Application.pdb
+C:\Source\Dev\PersonalDevelopment\YIDO\src\InvitationPlatform.Application\bin\Debug\net9.0\InvitationPlatform.Domain.dll
+C:\Source\Dev\PersonalDevelopment\YIDO\src\InvitationPlatform.Application\bin\Debug\net9.0\InvitationPlatform.Domain.pdb
+C:\Source\Dev\PersonalDevelopment\YIDO\src\InvitationPlatform.Application\obj\Debug\net9.0\InvitationPlatform.Application.csproj.AssemblyReference.cache
+C:\Source\Dev\PersonalDevelopment\YIDO\src\InvitationPlatform.Application\obj\Debug\net9.0\InvitationPlatform.Application.GeneratedMSBuildEditorConfig.editorconfig
+C:\Source\Dev\PersonalDevelopment\YIDO\src\InvitationPlatform.Application\obj\Debug\net9.0\InvitationPlatform.Application.AssemblyInfoInputs.cache
+C:\Source\Dev\PersonalDevelopment\YIDO\src\InvitationPlatform.Application\obj\Debug\net9.0\InvitationPlatform.Application.AssemblyInfo.cs
+C:\Source\Dev\PersonalDevelopment\YIDO\src\InvitationPlatform.Application\obj\Debug\net9.0\InvitationPlatform.Application.csproj.CoreCompileInputs.cache
+C:\Source\Dev\PersonalDevelopment\YIDO\src\InvitationPlatform.Application\obj\Debug\net9.0\Invitati.46F286FB.Up2Date
+C:\Source\Dev\PersonalDevelopment\YIDO\src\InvitationPlatform.Application\obj\Debug\net9.0\InvitationPlatform.Application.dll
+C:\Source\Dev\PersonalDevelopment\YIDO\src\InvitationPlatform.Application\obj\Debug\net9.0\refint\InvitationPlatform.Application.dll
+C:\Source\Dev\PersonalDevelopment\YIDO\src\InvitationPlatform.Application\obj\Debug\net9.0\InvitationPlatform.Application.pdb
+C:\Source\Dev\PersonalDevelopment\YIDO\src\InvitationPlatform.Application\obj\Debug\net9.0\ref\InvitationPlatform.Application.dll
