@@ -166,6 +166,7 @@ else if (!app.Environment.IsEnvironment("Testing"))
 {
     // TLS terminates at Container Apps ingress; the container speaks HTTP.
     app.UseHsts();
+    await DatabaseSeeder.EnsureRolesAsync(app.Services);
 }
 
 app.UseMiddleware<SecurityHeadersMiddleware>();

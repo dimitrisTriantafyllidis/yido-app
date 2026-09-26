@@ -9,16 +9,15 @@ namespace InvitationPlatform.Infrastructure.Persistence;
 
 public static class DatabaseSeeder
 {
-    public static async Task SeedAsync(IServiceProvider serviceProvider)
+    public static async Task EnsureRolesAsync(IServiceProvider serviceProvider)
     {
         using var scope = serviceProvider.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
+        await EnsureRolesAsync(roleManager);
+    }
 
-        await context.Database.MigrateAsync();
-
-        // Seed roles
+    private static async Task EnsureRolesAsync(RoleManager<ApplicationRole> roleManager)
+    {
         var roles = new[] { "Admin", "Owner", "Editor", "Viewer" };
         foreach (var roleName in roles)
         {
@@ -31,6 +30,17 @@ public static class DatabaseSeeder
                 });
             }
         }
+    }
+
+    public static async Task SeedAsync(IServiceProvider serviceProvider)
+    {
+        using var scope = serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
+
+        await context.Database.MigrateAsync();
+        await EnsureRolesAsync(roleManager);
 
         // Seed admin user
         var adminEmail = "admin@yido.gr";
