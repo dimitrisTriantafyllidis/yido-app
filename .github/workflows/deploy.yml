@@ -227,5 +227,4 @@ jobs:
           az sql server firewall-rule delete \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
             --server sql-yido-staging \
-            --name "github-actions-${{ github.run_id }}" \
-            --yes
+            --name "github-actions-${{ github.run_id }}"
