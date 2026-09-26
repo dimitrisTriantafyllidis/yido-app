@@ -4,8 +4,11 @@
 @description('Environment name (staging, production)')
 param environmentName string = 'staging'
 
-@description('Azure region')
+@description('Azure region for most resources')
 param location string = resourceGroup().location
+
+@description('Azure region for SQL. New subscriptions are often blocked in West Europe.')
+param sqlLocation string = 'northeurope'
 
 @description('SQL Server admin username')
 @secure()
@@ -33,8 +36,11 @@ param apiImageTag string = 'latest'
 @description('Web container image tag')
 param webImageTag string = 'latest'
 
-var resourceSuffix = '${environmentName}-${uniqueString(resourceGroup().id)}'
-var keyVaultName = 'kv-yido-${take(resourceSuffix, 8)}'
+var keyVaultName = 'kvyido${take(uniqueString(resourceGroup().id), 16)}'
+// Container Apps secrets cannot be empty strings.
+var stripeKeyValue = empty(stripeSecretKey) ? 'not-configured' : stripeSecretKey
+var sendGridKeyValue = empty(sendGridApiKey) ? 'not-configured' : sendGridApiKey
+var turnstileKeyValue = empty(turnstileSecretKey) ? 'not-configured' : turnstileSecretKey
 
 // Log Analytics Workspace
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
@@ -70,7 +76,7 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' =
 // Azure SQL Server
 resource sqlServer 'Microsoft.Sql/servers@2022-05-01-preview' = {
   name: 'sql-yido-${environmentName}'
-  location: location
+  location: sqlLocation
   properties: {
     administratorLogin: sqlAdminUsername
     administratorLoginPassword: sqlAdminPassword
@@ -94,7 +100,7 @@ resource sqlFirewallAzure 'Microsoft.Sql/servers/firewallRules@2022-05-01-previe
 resource sqlDatabase 'Microsoft.Sql/servers/databases@2022-05-01-preview' = {
   parent: sqlServer
   name: 'yido-${environmentName}'
-  location: location
+  location: sqlLocation
   sku: {
     name: 'Basic'
     tier: 'Basic'
@@ -234,15 +240,15 @@ resource apiApp 'Microsoft.App/containerApps@2023-05-01' = {
         }
         {
           name: 'stripe-key'
-          value: stripeSecretKey
+          value: stripeKeyValue
         }
         {
           name: 'sendgrid-key'
-          value: sendGridApiKey
+          value: sendGridKeyValue
         }
         {
           name: 'turnstile-key'
-          value: turnstileSecretKey
+          value: turnstileKeyValue
         }
       ]
     }
@@ -263,7 +269,7 @@ resource apiApp 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'Storage__Provider', value: 'azure' }
             { name: 'Storage__Azure__ConnectionString', secretRef: 'blob-connection' }
             { name: 'Storage__Azure__ContainerName', value: 'uploads' }
-            { name: 'Email__Provider', value: 'SendGrid' }
+            { name: 'Email__Provider', value: empty(sendGridApiKey) ? 'smtp' : 'SendGrid' }
             { name: 'Email__SendGrid__ApiKey', secretRef: 'sendgrid-key' }
             { name: 'Email__From', value: 'noreply@yido.gr' }
             { name: 'Email__FromName', value: 'YIDO' }
