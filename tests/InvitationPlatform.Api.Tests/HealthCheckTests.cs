@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace InvitationPlatform.Api.Tests;
 
-public class HealthCheckTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+public class HealthCheckTests(ApiWebApplicationFactory factory) : IClassFixture<ApiWebApplicationFactory>
 {
     [Fact]
     public async Task HealthEndpoint_ReturnsOk()

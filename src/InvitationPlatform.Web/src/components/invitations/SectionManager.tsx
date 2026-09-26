@@ -103,10 +103,10 @@ export function SectionManager({ sections: initialSections, onUpdate }: SectionM
     setSections((prev) =>
       prev.map((s) => {
         if (s.id === sectionId) {
-          const config = s.configuration ? JSON.parse(s.configuration) : {};
+          const config = s.configurationJson ? JSON.parse(s.configurationJson) : {};
           return {
             ...s,
-            configuration: JSON.stringify({ ...config, [field]: value }),
+            configurationJson: JSON.stringify({ ...config, [field]: value }),
           };
         }
         return s;
@@ -136,7 +136,7 @@ export function SectionManager({ sections: initialSections, onUpdate }: SectionM
       <div className="space-y-2">
         {sections.map((section, index) => {
           const isExpanded = expandedSection === section.id;
-          const config = section.configuration ? JSON.parse(section.configuration) : {};
+          const config = section.configurationJson ? JSON.parse(section.configurationJson) : {};
 
           return (
             <div

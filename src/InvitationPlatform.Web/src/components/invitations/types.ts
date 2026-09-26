@@ -58,6 +58,15 @@ export interface InvitationSectionState {
   config: Record<string, unknown>;
 }
 
+/** Editable invitation section from the API (dashboard editor / section manager). */
+export interface InvitationSection {
+  id: string;
+  sectionType: string;
+  sortOrder: number;
+  isEnabled: boolean;
+  configurationJson: string | null;
+}
+
 export interface InvitationViewModel {
   title: string;
   eventDate: string | null;
@@ -110,13 +119,7 @@ export interface PublicInvitationPayload {
   invitation: {
     id: string;
     template?: { id: string; name: string; eventType: string; category?: string | null };
-    sections: {
-      id: string;
-      sectionType: string;
-      sortOrder: number;
-      isEnabled: boolean;
-      configurationJson: string | null;
-    }[];
+    sections: InvitationSection[];
   };
   media?: {
     id: string;

@@ -64,20 +64,25 @@ builder.WebHost.ConfigureKestrel(options =>
     options.Limits.MaxRequestBodySize = 100 * 1024 * 1024;
 });
 
-// Hangfire (SQL Server storage)
-builder.Services.AddHangfire(config => config
-    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
-    .UseSimpleAssemblyNameTypeSerializer()
-    .UseRecommendedSerializerSettings()
-    .UseSqlServerStorage(builder.Configuration.GetConnectionString("DefaultConnection"), new SqlServerStorageOptions
-    {
-        CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
-        SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
-        QueuePollInterval = TimeSpan.Zero,
-        UseRecommendedIsolationLevel = true,
-        DisableGlobalLocks = true
-    }));
-builder.Services.AddHangfireServer();
+// Hangfire uses SQL Server in real environments. Integration tests swap EF to
+// InMemory and skip Hangfire so CI (Linux) never touches LocalDB.
+var isTesting = builder.Environment.IsEnvironment("Testing");
+if (!isTesting)
+{
+    builder.Services.AddHangfire(config => config
+        .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+        .UseSimpleAssemblyNameTypeSerializer()
+        .UseRecommendedSerializerSettings()
+        .UseSqlServerStorage(builder.Configuration.GetConnectionString("DefaultConnection"), new SqlServerStorageOptions
+        {
+            CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+            SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+            QueuePollInterval = TimeSpan.Zero,
+            UseRecommendedIsolationLevel = true,
+            DisableGlobalLocks = true
+        }));
+    builder.Services.AddHangfireServer();
+}
 
 // Rate limiting
 builder.Services.AddRateLimiter(options =>
@@ -155,7 +160,7 @@ if (app.Environment.IsDevelopment())
 
     await DatabaseSeeder.SeedAsync(app.Services);
 }
-else
+else if (!app.Environment.IsEnvironment("Testing"))
 {
     app.UseHsts();
     app.UseHttpsRedirection();
@@ -180,16 +185,16 @@ app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.Health
     Predicate = check => check.Tags.Contains("ready")
 });
 
-// Hangfire dashboard (admin only, development)
-if (app.Environment.IsDevelopment())
+if (!app.Environment.IsEnvironment("Testing"))
 {
-    app.MapHangfireDashboard("/hangfire");
-}
+    if (app.Environment.IsDevelopment())
+        app.MapHangfireDashboard("/hangfire");
 
-RecurringJob.AddOrUpdate<HangfireJobRunner>(
-    "expire-events-subscriptions",
-    j => j.ExpireEventsAndSubscriptions(),
-    Cron.Daily);
+    RecurringJob.AddOrUpdate<HangfireJobRunner>(
+        "expire-events-subscriptions",
+        j => j.ExpireEventsAndSubscriptions(),
+        Cron.Daily);
+}
 
 app.Run();
 
