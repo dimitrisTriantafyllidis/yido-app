@@ -274,7 +274,7 @@ resource apiApp 'Microsoft.App/containerApps@2023-05-01' = {
             { name: 'Email__From', value: 'noreply@yido.gr' }
             { name: 'Email__FromName', value: 'YIDO' }
             { name: 'Stripe__SecretKey', secretRef: 'stripe-key' }
-            { name: 'Stripe__AllowDevBypass', value: 'false' }
+            { name: 'Stripe__AllowDevBypass', value: environmentName == 'production' ? 'false' : 'true' }
             { name: 'Captcha__Turnstile__SecretKey', secretRef: 'turnstile-key' }
             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsights.properties.ConnectionString }
           ]

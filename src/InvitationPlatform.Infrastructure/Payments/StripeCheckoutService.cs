@@ -13,6 +13,7 @@ public class StripeCheckoutService(IConfiguration configuration, ILogger<StripeC
 
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(SecretKey)
+        && !SecretKey.Equals("not-configured", StringComparison.OrdinalIgnoreCase)
         && !SecretKey.StartsWith("sk_test_REPLACE", StringComparison.OrdinalIgnoreCase)
         && SecretKey.StartsWith("sk_", StringComparison.OrdinalIgnoreCase);
 
