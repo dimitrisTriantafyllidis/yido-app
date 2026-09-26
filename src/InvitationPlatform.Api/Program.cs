@@ -67,13 +67,15 @@ builder.WebHost.ConfigureKestrel(options =>
 // Hangfire uses SQL Server in real environments. Integration tests swap EF to
 // InMemory and skip Hangfire so CI (Linux) never touches LocalDB.
 var isTesting = builder.Environment.IsEnvironment("Testing");
-if (!isTesting)
+var hangfireConnection = builder.Configuration.GetConnectionString("DefaultConnection");
+var useHangfire = !isTesting && !string.IsNullOrWhiteSpace(hangfireConnection);
+if (useHangfire)
 {
     builder.Services.AddHangfire(config => config
         .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
         .UseSimpleAssemblyNameTypeSerializer()
         .UseRecommendedSerializerSettings()
-        .UseSqlServerStorage(builder.Configuration.GetConnectionString("DefaultConnection"), new SqlServerStorageOptions
+        .UseSqlServerStorage(hangfireConnection, new SqlServerStorageOptions
         {
             CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
             SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
@@ -162,8 +164,8 @@ if (app.Environment.IsDevelopment())
 }
 else if (!app.Environment.IsEnvironment("Testing"))
 {
+    // TLS terminates at Container Apps ingress; the container speaks HTTP.
     app.UseHsts();
-    app.UseHttpsRedirection();
 }
 
 app.UseMiddleware<SecurityHeadersMiddleware>();
@@ -185,12 +187,12 @@ app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.Health
     Predicate = check => check.Tags.Contains("ready")
 });
 
-if (!app.Environment.IsEnvironment("Testing"))
+if (useHangfire)
 {
     if (app.Environment.IsDevelopment())
         app.MapHangfireDashboard("/hangfire");
 
-    RecurringJob.AddOrUpdate<HangfireJobRunner>(
+    app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<HangfireJobRunner>(
         "expire-events-subscriptions",
         j => j.ExpireEventsAndSubscriptions(),
         Cron.Daily);
