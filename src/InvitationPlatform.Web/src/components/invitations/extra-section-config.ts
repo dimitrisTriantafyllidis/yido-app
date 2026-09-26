@@ -55,45 +55,47 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 export function parseQuizQuestions(config: Record<string, unknown>): QuizQuestionConfig[] {
   const raw = config.questions;
   if (!Array.isArray(raw)) return [];
-  return raw
-    .map((item) => {
-      const rec = asRecord(item);
-      if (!rec) return null;
-      const q = typeof rec.q === "string" ? rec.q.trim() : "";
-      const options = Array.isArray(rec.options)
-        ? rec.options.filter((o): o is string => typeof o === "string").map((o) => o.trim())
-        : [];
-      const correct = typeof rec.correct === "number" ? rec.correct : Number(rec.correct);
-      const emoji = typeof rec.emoji === "string" && rec.emoji.trim() ? rec.emoji : "💍";
-      if (!q || options.length < 2) return null;
-      return {
-        q,
-        options,
-        correct: Number.isInteger(correct) && correct >= 0 && correct < options.length ? correct : 0,
-        emoji,
-      };
-    })
-    .filter((q): q is QuizQuestionConfig => q !== null);
+
+  const questions: QuizQuestionConfig[] = [];
+  for (const item of raw) {
+    const rec = asRecord(item);
+    if (!rec) continue;
+    const q = typeof rec.q === "string" ? rec.q.trim() : "";
+    const options = Array.isArray(rec.options)
+      ? rec.options.filter((o): o is string => typeof o === "string").map((o) => o.trim())
+      : [];
+    const correct = typeof rec.correct === "number" ? rec.correct : Number(rec.correct);
+    const emoji = typeof rec.emoji === "string" && rec.emoji.trim() ? rec.emoji : "💍";
+    if (!q || options.length < 2) continue;
+    questions.push({
+      q,
+      options,
+      correct: Number.isInteger(correct) && correct >= 0 && correct < options.length ? correct : 0,
+      emoji,
+    });
+  }
+  return questions;
 }
 
 export function parseVendors(config: Record<string, unknown>): VendorConfig[] {
   const raw = config.vendors;
   if (!Array.isArray(raw)) return [];
-  return raw
-    .map((item) => {
-      const rec = asRecord(item);
-      if (!rec) return null;
-      const name = typeof rec.name === "string" ? rec.name.trim() : "";
-      if (!name) return null;
-      return {
-        name,
-        category: typeof rec.category === "string" ? rec.category.trim() : "",
-        website: typeof rec.website === "string" ? rec.website.trim() : "",
-        logo: typeof rec.logo === "string" ? rec.logo.trim() : "",
-        description: typeof rec.description === "string" ? rec.description.trim() : "",
-      };
-    })
-    .filter((v): v is VendorConfig => v !== null);
+
+  const vendors: VendorConfig[] = [];
+  for (const item of raw) {
+    const rec = asRecord(item);
+    if (!rec) continue;
+    const name = typeof rec.name === "string" ? rec.name.trim() : "";
+    if (!name) continue;
+    vendors.push({
+      name,
+      category: typeof rec.category === "string" ? rec.category.trim() : "",
+      website: typeof rec.website === "string" ? rec.website.trim() : "",
+      logo: typeof rec.logo === "string" ? rec.logo.trim() : "",
+      description: typeof rec.description === "string" ? rec.description.trim() : "",
+    });
+  }
+  return vendors;
 }
 
 export function emptyQuizQuestion(): QuizQuestionConfig {
