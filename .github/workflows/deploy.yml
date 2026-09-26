@@ -2,23 +2,24 @@ name: Deploy to Azure
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Environment to deploy to'
+        description: Environment to deploy to
         required: true
-        default: 'staging'
+        default: staging
         type: choice
         options:
           - staging
           - production
 
 env:
-  DOTNET_VERSION: '9.0.x'
-  NODE_VERSION: '22'
-  AZURE_RESOURCE_GROUP: 'rg-yido-${{ github.event.inputs.environment || ''staging'' }}'
-  AZURE_LOCATION: 'westeurope'
+  DOTNET_VERSION: "9.0.x"
+  NODE_VERSION: "22"
+  AZURE_RESOURCE_GROUP: rg-yido-${{ github.event.inputs.environment || 'staging' }}
+  AZURE_LOCATION: westeurope
+  AZURE_SQL_LOCATION: swedencentral
 
 jobs:
   build-api:
@@ -132,6 +133,7 @@ jobs:
           parameters: >-
             environmentName=${{ github.event.inputs.environment || 'staging' }}
             location=${{ env.AZURE_LOCATION }}
+            sqlLocation=${{ env.AZURE_SQL_LOCATION }}
             sqlAdminUsername=${{ secrets.SQL_ADMIN_USERNAME }}
             sqlAdminPassword=${{ secrets.SQL_ADMIN_PASSWORD }}
             stripeSecretKey=${{ secrets.STRIPE_SECRET_KEY }}
