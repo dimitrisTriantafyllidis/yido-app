@@ -46,8 +46,8 @@ jobs:
         with:
           images: ${{ secrets.ACR_LOGIN_SERVER }}/yido-api
           tags: |
-            type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=,format=long
+            type=raw,value=latest
 
       - name: Build and push API image
         uses: docker/build-push-action@v5
@@ -81,8 +81,8 @@ jobs:
         with:
           images: ${{ secrets.ACR_LOGIN_SERVER }}/yido-web
           tags: |
-            type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=,format=long
+            type=raw,value=latest
 
       - name: Build and push Web image
         uses: docker/build-push-action@v5
