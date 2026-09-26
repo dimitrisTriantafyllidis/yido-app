@@ -18,7 +18,7 @@ env:
   DOTNET_VERSION: "9.0.x"
   NODE_VERSION: "22"
   AZURE_RESOURCE_GROUP: rg-yido-${{ github.event.inputs.environment || 'staging' }}
-  AZURE_LOCATION: westeurope
+  AZURE_LOCATION: northeurope
   AZURE_SQL_LOCATION: swedencentral
 
 jobs:
