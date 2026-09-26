@@ -212,11 +212,14 @@ jobs:
         run: dotnet tool install --global dotnet-ef --version 9.*
 
       - name: Run Migrations
+        env:
+          SQL_ADMIN_PASSWORD: ${{ secrets.SQL_ADMIN_PASSWORD }}
         run: |
+          CONNECTION="Server=tcp:sql-yido-staging.database.windows.net,1433;Initial Catalog=yido-staging;User ID=yidoadmin;Password=${SQL_ADMIN_PASSWORD};Encrypt=True;TrustServerCertificate=False;"
           dotnet ef database update \
             --project src/InvitationPlatform.Infrastructure \
             --startup-project src/InvitationPlatform.Api \
-            --connection "${{ secrets.SQL_CONNECTION_STRING }}"
+            --connection "$CONNECTION"
 
       - name: Remove runner SQL access
         if: always()
