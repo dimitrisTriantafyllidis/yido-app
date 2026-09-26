@@ -160,13 +160,13 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "YIDO API"));
 
-    await DatabaseSeeder.SeedAsync(app.Services);
+    await DatabaseSeeder.SeedAsync(app.Services, includeDemoData: true);
 }
 else if (!app.Environment.IsEnvironment("Testing"))
 {
     // TLS terminates at Container Apps ingress; the container speaks HTTP.
     app.UseHsts();
-    await DatabaseSeeder.EnsureRolesAsync(app.Services);
+    await DatabaseSeeder.SeedAsync(app.Services, includeDemoData: false);
 }
 
 app.UseMiddleware<SecurityHeadersMiddleware>();

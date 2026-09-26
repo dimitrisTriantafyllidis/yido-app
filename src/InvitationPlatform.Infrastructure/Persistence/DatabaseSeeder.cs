@@ -32,7 +32,7 @@ public static class DatabaseSeeder
         }
     }
 
-    public static async Task SeedAsync(IServiceProvider serviceProvider)
+    public static async Task SeedAsync(IServiceProvider serviceProvider, bool includeDemoData = true)
     {
         using var scope = serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -42,6 +42,8 @@ public static class DatabaseSeeder
         await context.Database.MigrateAsync();
         await EnsureRolesAsync(roleManager);
 
+        if (includeDemoData)
+        {
         // Seed admin user
         var adminEmail = "admin@yido.gr";
         if (await userManager.FindByEmailAsync(adminEmail) == null)
@@ -201,6 +203,7 @@ public static class DatabaseSeeder
             );
 
             await context.SaveChangesAsync();
+        }
         }
 
         // Seed themes
