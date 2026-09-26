@@ -35,6 +35,7 @@ public class InvitationsController(
 
         if (version is null) return NotFound();
 
+        await EnsureMissingTemplateSectionsAsync(version);
         return Ok(MapVersion(version));
     }
 
@@ -153,6 +154,82 @@ public class InvitationsController(
         await db.SaveChangesAsync();
 
         return Ok(new { version.Id, themeId = version.ThemeId, version.VersionNumber, version.IsPublished });
+    }
+
+    /// <summary>Change the template for an invitation (replaces sections with new template defaults).</summary>
+    [HttpPatch("template")]
+    public async Task<IActionResult> UpdateTemplate(Guid eventId, [FromBody] UpdateTemplateRequest request)
+    {
+        if (tenantContext.TenantId is null) return Forbid();
+        var tenantId = tenantContext.TenantId.Value;
+
+        var version = await EnsureEditableDraftAsync(eventId);
+        if (version is null) return NotFound();
+
+        var template = await db.InvitationTemplates
+            .Include(t => t.SectionDefinitions.OrderBy(s => s.DefaultSortOrder))
+            .Where(t => t.Id == request.TemplateId && t.IsActive)
+            .FirstOrDefaultAsync();
+
+        if (template is null)
+            return BadRequest(new { title = "Template not found or inactive." });
+
+        if (template.IsPremium || template.MinPackageTier > (int)PackageTier.Mini)
+        {
+            var subscription = await db.Subscriptions
+                .Include(s => s.Package)
+                .Where(s => s.TenantId == tenantId
+                    && s.EventId == eventId
+                    && s.Status == SubscriptionStatus.Active
+                    && (s.ExpiresAt == null || s.ExpiresAt > DateTime.UtcNow))
+                .OrderByDescending(s => s.ActivatedAt ?? s.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            var currentTier = subscription is null ? (int)PackageTier.Mini : (int)subscription.Package.Tier;
+            if (currentTier < template.MinPackageTier)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new ProblemDetails
+                {
+                    Title = "Upgrade required to use this template.",
+                    Status = StatusCodes.Status403Forbidden
+                });
+            }
+        }
+
+        // Remove existing sections for this version
+        var oldSections = await db.InvitationSections
+            .Where(s => s.InvitationVersionId == version.Id)
+            .ToListAsync();
+        db.InvitationSections.RemoveRange(oldSections);
+
+        // Add sections from new template
+        foreach (var def in template.SectionDefinitions)
+        {
+            db.InvitationSections.Add(new InvitationSection
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                InvitationVersionId = version.Id,
+                SectionType = def.SectionType,
+                SortOrder = def.DefaultSortOrder,
+                IsEnabled = def.IsEnabledByDefault,
+                ConfigurationJson = def.DefaultConfigJson
+            });
+        }
+
+        version.TemplateId = request.TemplateId;
+        version.ThemeId = request.ThemeId ?? template.DefaultThemeId ?? version.ThemeId;
+
+        await db.SaveChangesAsync();
+
+        // Reload with all related data
+        var updated = await db.InvitationVersions
+            .Include(v => v.Template)
+            .Include(v => v.Theme)
+            .Include(v => v.Sections.OrderBy(s => s.SortOrder))
+            .FirstAsync(v => v.Id == version.Id);
+
+        return Ok(MapVersion(updated));
     }
 
     [HttpPut("sections/{sectionId:guid}")]
@@ -278,14 +355,16 @@ public class InvitationsController(
     public async Task<IActionResult> GetPublishedBySlug(string slug, [FromQuery(Name = "t")] string? inviteToken)
     {
         var evt = await db.Events
+            .IgnoreQueryFilters()
             .Include(e => e.Venues.OrderBy(v => v.SortOrder))
             .Include(e => e.Persons.OrderBy(p => p.SortOrder))
-            .Where(e => e.Slug == slug && e.Status == EventStatus.Published)
+            .Where(e => e.Slug == slug && e.Status == EventStatus.Published && !e.IsDeleted)
             .FirstOrDefaultAsync();
 
         if (evt is null) return NotFound();
 
         var version = await db.InvitationVersions
+            .IgnoreQueryFilters()
             .Include(v => v.Template)
             .Include(v => v.Theme)
             .Include(v => v.Sections.OrderBy(s => s.SortOrder))
@@ -299,7 +378,8 @@ public class InvitationsController(
         if (!string.IsNullOrWhiteSpace(inviteToken))
         {
             guest = await db.Guests
-                .FirstOrDefaultAsync(g => g.EventId == evt.Id && g.InviteToken == inviteToken);
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(g => g.EventId == evt.Id && g.InviteToken == inviteToken && !g.IsDeleted);
         }
 
         var venues = evt.Venues.AsEnumerable();
@@ -310,6 +390,7 @@ public class InvitationsController(
         }
 
         var media = await db.MediaFiles
+            .IgnoreQueryFilters()
             .Where(m => m.EventId == evt.Id && !m.IsFlagged
                         && (!m.IsGuestUpload || m.IsModerated))
             .OrderBy(m => m.SortOrder)
@@ -317,6 +398,7 @@ public class InvitationsController(
             .ToListAsync();
 
         var questions = await db.RsvpQuestions
+            .IgnoreQueryFilters()
             .Where(q => q.EventId == evt.Id)
             .OrderBy(q => q.SortOrder)
             .Select(q => new
@@ -328,6 +410,13 @@ public class InvitationsController(
                 q.IsRequired,
                 q.SortOrder
             })
+            .ToListAsync();
+
+        var wishes = await db.GuestWishes
+            .IgnoreQueryFilters()
+            .Where(w => w.EventId == evt.Id)
+            .OrderByDescending(w => w.CreatedAt)
+            .Select(w => new { w.Id, Name = w.GuestName, w.Message, w.CreatedAt })
             .ToListAsync();
 
         return Ok(new
@@ -384,8 +473,45 @@ public class InvitationsController(
                 guest.InviteToken
             },
             RsvpQuestions = questions,
+            Wishes = wishes,
             QrUrl = $"/api/v1/events/{evt.Id}/qr"
         });
+    }
+
+    private async Task EnsureMissingTemplateSectionsAsync(InvitationVersion version)
+    {
+        var defs = await db.TemplateSectionDefinitions
+            .Where(d => d.TemplateId == version.TemplateId)
+            .OrderBy(d => d.DefaultSortOrder)
+            .ToListAsync();
+
+        if (defs.Count == 0) return;
+
+        var existingTypes = version.Sections.Select(s => s.SectionType).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var added = false;
+        var maxSort = version.Sections.Count == 0 ? -1 : version.Sections.Max(s => s.SortOrder);
+
+        foreach (var def in defs)
+        {
+            if (existingTypes.Contains(def.SectionType)) continue;
+            maxSort++;
+            var section = new InvitationSection
+            {
+                Id = Guid.NewGuid(),
+                TenantId = version.TenantId,
+                InvitationVersionId = version.Id,
+                SectionType = def.SectionType,
+                SortOrder = def.DefaultSortOrder > maxSort ? def.DefaultSortOrder : maxSort,
+                IsEnabled = false,
+                ConfigurationJson = def.DefaultConfigJson
+            };
+            db.InvitationSections.Add(section);
+            version.Sections.Add(section);
+            added = true;
+        }
+
+        if (added)
+            await db.SaveChangesAsync();
     }
 
     private async Task<InvitationVersion?> GetLatestVersion(Guid eventId)
@@ -497,7 +623,8 @@ public class InvitationsController(
         {
             v.Template.Id,
             v.Template.Name,
-            EventType = v.Template.EventType.ToString()
+            EventType = v.Template.EventType.ToString(),
+            v.Template.Category
         },
         Theme = v.Theme == null ? null : new
         {
@@ -526,6 +653,7 @@ public class InvitationsController(
 
 public record CreateInvitationRequest(Guid TemplateId, Guid? ThemeId);
 public record UpdateThemeRequest(Guid ThemeId);
+public record UpdateTemplateRequest(Guid TemplateId, Guid? ThemeId = null);
 public record UpdateSlugRequest(string Slug);
 public record UpdateSectionRequest(bool? IsEnabled, int? SortOrder, string? ConfigurationJson);
 public record ReorderSectionsRequest(List<SectionOrder> SectionOrders);

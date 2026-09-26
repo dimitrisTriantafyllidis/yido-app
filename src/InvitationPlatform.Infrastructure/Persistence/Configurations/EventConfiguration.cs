@@ -38,6 +38,6 @@ public class EventConfiguration : IEntityTypeConfiguration<Event>
             .HasForeignKey(e => e.TenantId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasQueryFilter(e => !e.IsDeleted);
+        // Note: Query filter (soft-delete + tenant) is applied centrally in ApplicationDbContext
     }
 }

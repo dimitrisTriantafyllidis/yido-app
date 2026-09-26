@@ -64,7 +64,8 @@ public class AdminController(
                 o.Currency,
                 Status = o.Status.ToString(),
                 o.CreatedAt,
-                TenantName = o.Tenant.Name
+                TenantName = o.Tenant.Name,
+                PackageName = o.Subscription != null ? o.Subscription.Package.DisplayName : null
             })
             .ToListAsync();
 

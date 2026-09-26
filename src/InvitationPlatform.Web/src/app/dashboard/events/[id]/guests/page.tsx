@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { DashboardIcon } from "@/components/dashboard/dashboard-icons";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 
@@ -36,31 +37,62 @@ interface GuestGroupData {
   guestCount: number;
 }
 
+interface SubscriptionSummary {
+  packageName: string;
+  status: string;
+}
+
+const RSVP_STYLES = {
+  pending: {
+    pill: "bg-[#FFF3E0] text-[#B65F00]",
+    dot: "bg-[#B65F00]",
+    label: "Εκκρεμεί",
+  },
+  confirmed: {
+    pill: "bg-[#E3F3EA] text-[#1B5E3A]",
+    dot: "bg-[#1B5E3A]",
+    label: "Ναι",
+  },
+  declined: {
+    pill: "bg-[#FDF0F0] text-[#A82020]",
+    dot: "bg-[#A82020]",
+    label: "Όχι",
+  },
+} as const;
+
 export default function GuestsPage() {
   const params = useParams();
-  const { logout } = useAuth();
+  const { user } = useAuth();
   const eventId = params.id as string;
 
   const [guests, setGuests] = useState<GuestData[]>([]);
   const [groups, setGroups] = useState<GuestGroupData[]>([]);
   const [eventSlug, setEventSlug] = useState<string | null>(null);
+  const [subscriptionLabel, setSubscriptionLabel] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [editingGuest, setEditingGuest] = useState<GuestData | null>(null);
   const [newGroupName, setNewGroupName] = useState("");
 
+  const tenantName = user?.currentTenant?.name ?? "—";
+
   const loadGuests = useCallback(async () => {
     try {
-      const [data, groupData, evt] = await Promise.all([
+      const [data, groupData, evt, subscriptions] = await Promise.all([
         api<GuestData[]>(`/api/v1/events/${eventId}/guests`),
         api<GuestGroupData[]>(`/api/v1/events/${eventId}/guest-groups`).catch(
           () => [] as GuestGroupData[]
         ),
         api<{ slug: string | null }>(`/api/v1/events/${eventId}`).catch(() => null),
+        api<SubscriptionSummary[]>("/api/v1/subscriptions").catch(
+          () => [] as SubscriptionSummary[]
+        ),
       ]);
       setGuests(data);
       setGroups(groupData);
       setEventSlug(evt?.slug ?? null);
+      const active = subscriptions.find((s) => s.status === "Active");
+      setSubscriptionLabel(active?.packageName ?? null);
     } catch {
       // empty
     } finally {
@@ -124,278 +156,313 @@ export default function GuestsPage() {
     loadGuests();
   };
 
-  const confirmed = guests.filter(
-    (g) => g.rsvpStatus?.attendingReception === true
-  );
-  const declined = guests.filter(
-    (g) => g.rsvpStatus?.attendingReception === false
-  );
+  const confirmed = guests.filter((g) => g.rsvpStatus?.attendingReception === true);
+  const declined = guests.filter((g) => g.rsvpStatus?.attendingReception === false);
   const pending = guests.filter((g) => g.rsvpStatus === null);
-  const totalAdults = confirmed.reduce(
-    (s, g) => s + (g.rsvpStatus?.adultCount ?? 0),
-    0
-  );
+  const totalAdults = confirmed.reduce((s, g) => s + (g.rsvpStatus?.adultCount ?? 0), 0);
   const totalChildren = confirmed.reduce(
     (s, g) => s + (g.rsvpStatus?.childrenCount ?? 0),
     0
   );
 
+  const packageDisplay = subscriptionLabel
+    ? subscriptionLabel.toUpperCase() === "DIGITAL"
+      ? "Premium"
+      : subscriptionLabel.charAt(0).toUpperCase() + subscriptionLabel.slice(1).toLowerCase()
+    : null;
+
   return (
-    <div className="min-h-screen bg-bg">
-      <header className="border-b border-border bg-surface">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link
-              href="/"
-              className="font-display text-lg font-semibold text-text-primary"
-            >
-              YIDO
-            </Link>
-            <span className="text-text-muted">/</span>
-            <Link
-              href={`/dashboard/events/${eventId}`}
-              className="text-sm text-text-secondary hover:text-text-primary transition-colors"
-            >
-              Εκδήλωση
-            </Link>
-            <span className="text-text-muted">/</span>
-            <span className="text-sm text-text-primary font-medium">
-              Καλεσμένοι
-            </span>
-          </div>
-          <button
-            onClick={logout}
-            className="text-sm text-text-muted hover:text-text-primary cursor-pointer"
+    <main className="flex flex-col gap-8 px-6 py-10 pb-12 md:px-12">
+      <section className="flex flex-col gap-3">
+        <nav className="flex items-center gap-2 text-xs">
+          <Link href="/dashboard" className="font-medium text-[#9C9293] hover:text-[#1C1516]">
+            YIDO
+          </Link>
+          <span className="text-[#9C9293]">/</span>
+          <Link
+            href={`/dashboard/events/${eventId}`}
+            className="font-medium text-[#9C9293] hover:text-[#1C1516]"
           >
-            Αποσύνδεση
-          </button>
-        </div>
-      </header>
+            Εκδήλωση
+          </Link>
+          <span className="text-[#9C9293]">/</span>
+          <span className="font-semibold text-[#C4993D]">Καλεσμένοι</span>
+        </nav>
 
-      <main className="max-w-6xl mx-auto px-6 py-8">
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-          {[
-            { label: "Σύνολο", value: guests.length, color: "text-text-primary" },
-            { label: "Επιβεβαιωμένοι", value: confirmed.length, color: "text-success" },
-            { label: "Αρνήθηκαν", value: declined.length, color: "text-destructive" },
-            { label: "Εκκρεμούν", value: pending.length, color: "text-warning" },
-            {
-              label: "Άτομα (ενήλ. + παιδ.)",
-              value: `${totalAdults} + ${totalChildren}`,
-              color: "text-accent",
-            },
-          ].map((stat) => (
-            <div
-              key={stat.label}
-              className="p-4 bg-surface border border-border rounded-lg"
-            >
-              <p className="text-xs text-text-muted">{stat.label}</p>
-              <p
-                className={`mt-1 font-display text-2xl font-semibold ${stat.color}`}
+        <div>
+          <h1 className="text-[28px] font-bold text-[#1C1516]">Διαχείριση Καλεσμένων</h1>
+          <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-[#6E6263]">
+            <span>
+              Διαχειριστής:{" "}
+              <span className="font-semibold text-[#1C1516]">{tenantName}</span>
+            </span>
+            {packageDisplay ? (
+              <>
+                <span className="size-1 rounded-full bg-[#9C9293]" aria-hidden />
+                <span className="text-[#9C9293]">{packageDisplay} Συνδρομή</span>
+              </>
+            ) : null}
+          </p>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <GuestStatCard label="ΣΥΝΟΛΟ" value={guests.length} />
+        <GuestStatCard
+          label="ΕΠΙΒΕΒΑΙΩΜΕΝΟΙ"
+          value={confirmed.length}
+          dotColor="bg-[#1B5E3A]"
+          valueClass="text-[#1B5E3A]"
+        />
+        <GuestStatCard
+          label="ΑΡΝΗΘΗΚΑΝ"
+          value={declined.length}
+          dotColor="bg-[#A82020]"
+          valueClass="text-[#A82020]"
+        />
+        <GuestStatCard
+          label="ΕΚΚΡΕΜΟΥΝ"
+          value={pending.length}
+          dotColor="bg-[#B65F00]"
+          valueClass="text-[#B65F00]"
+        />
+        <GuestStatCard
+          label="ΑΤΟΜΑ (ΕΝΗΛ. + ΠΑΙΔ.)"
+          value={
+            <>
+              {totalAdults}{" "}
+              <span className="text-base font-normal text-[#9C9293]">+ {totalChildren}</span>
+            </>
+          }
+        />
+      </section>
+
+      <section className="flex flex-col gap-6 xl:flex-row xl:items-start">
+        <aside className="w-full shrink-0 xl:w-[320px]">
+          <div className="rounded-2xl border border-[#EDE8E3] bg-white p-6">
+            <h2 className="text-base font-semibold text-[#1C1516]">Ομάδες</h2>
+
+            <div className="mt-5 space-y-3">
+              <div className="space-y-1.5">
+                <label htmlFor="group-name" className="block text-xs font-medium text-[#6E6263]">
+                  Όνομα ομάδας
+                </label>
+                <input
+                  id="group-name"
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addGroup();
+                    }
+                  }}
+                  placeholder="Νέα ομάδα..."
+                  className="h-10 w-full rounded-md border border-[#EDE8E3] bg-[#F9F8F6] px-3 text-[13px] text-[#1C1516] placeholder:text-[#9C9293] outline-none focus:border-[#C4993D] focus:ring-1 focus:ring-[#C4993D]"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={addGroup}
+                className="h-10 w-full rounded-md bg-[#C4993D] text-[13px] font-semibold text-white transition-colors hover:bg-[#B38935]"
               >
-                {stat.value}
-              </p>
+                Προσθήκη
+              </button>
             </div>
-          ))}
-        </div>
 
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
-          <h1 className="font-display text-xl font-semibold text-text-primary">
-            Καλεσμένοι
-          </h1>
-          <div className="flex gap-2">
-            <button
-              onClick={exportExcel}
-              className="px-4 py-2 text-sm font-medium text-text-primary border border-border rounded-lg hover:bg-bg transition-colors cursor-pointer"
-            >
-              Εξαγωγή Excel
-            </button>
-            <button
-              onClick={() => setShowAdd(true)}
-              className="px-4 py-2 text-sm font-medium text-white bg-accent rounded-lg hover:bg-accent-hover transition-colors cursor-pointer"
-            >
-              + Προσθήκη
-            </button>
-          </div>
-        </div>
+            <div className="my-5 h-px bg-[#EDE8E3]" />
 
-        <div className="mb-8 p-4 bg-surface border border-border rounded-xl">
-          <h2 className="text-sm font-medium text-text-primary mb-3">Ομάδες</h2>
-          <div className="flex gap-2 mb-3">
-            <input
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-              placeholder="Νέα ομάδα"
-              className="flex-1 rounded-lg border border-border bg-bg px-3 py-2 text-sm"
-            />
-            <button
-              onClick={addGroup}
-              className="px-3 py-2 text-sm bg-accent text-white rounded-lg cursor-pointer"
-            >
-              Προσθήκη
-            </button>
-          </div>
-          {groups.length > 0 && (
-            <ul className="space-y-1 text-sm text-text-secondary">
-              {groups.map((g) => (
-                <li key={g.id} className="flex justify-between gap-2">
-                  <span>
-                    {g.name} ({g.guestCount})
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => copyInvite(g.inviteToken)}
-                    className="text-accent text-xs cursor-pointer"
-                  >
-                    Αντιγραφή συνδέσμου
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center py-20">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-          </div>
-        ) : guests.length === 0 ? (
-          <div className="text-center py-16 bg-surface border border-border rounded-xl">
-            <p className="text-text-muted mb-4">
-              Δεν υπάρχουν καλεσμένοι ακόμα.
-            </p>
-            <button
-              onClick={() => setShowAdd(true)}
-              className="px-6 py-2 text-sm font-medium text-white bg-accent rounded-lg hover:bg-accent-hover transition-colors cursor-pointer"
-            >
-              + Προσθήκη πρώτου καλεσμένου
-            </button>
-          </div>
-        ) : (
-          <div className="bg-surface border border-border rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-bg">
-                  <th className="text-left px-4 py-3 font-medium text-text-secondary">
-                    Όνομα
-                  </th>
-                  <th className="text-left px-4 py-3 font-medium text-text-secondary">
-                    Email
-                  </th>
-                  <th className="text-left px-4 py-3 font-medium text-text-secondary">
-                    Τηλέφωνο
-                  </th>
-                  <th className="text-left px-4 py-3 font-medium text-text-secondary">
-                    Ομάδα
-                  </th>
-                  <th className="text-center px-4 py-3 font-medium text-text-secondary">
-                    RSVP
-                  </th>
-                  <th className="text-center px-4 py-3 font-medium text-text-secondary">
-                    Άτομα
-                  </th>
-                  <th className="text-center px-4 py-3 font-medium text-text-secondary">
-                    Πρόσκληση
-                  </th>
-                  <th className="text-right px-4 py-3 font-medium text-text-secondary" />
-                </tr>
-              </thead>
-              <tbody>
-                {guests.map((g) => (
-                  <tr
+            {groups.length === 0 ? (
+              <p className="text-[13px] text-[#9C9293]">Δεν υπάρχουν ομάδες ακόμα.</p>
+            ) : (
+              <ul className="space-y-1">
+                {groups.map((g) => (
+                  <li
                     key={g.id}
-                    className="border-b border-border last:border-0 hover:bg-bg/50"
+                    className="flex items-center justify-between py-2 text-[13px]"
                   >
-                    <td className="px-4 py-3 font-medium text-text-primary">
-                      {g.firstName} {g.lastName}
-                    </td>
-                    <td className="px-4 py-3 text-text-secondary">
-                      {g.email ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-text-secondary">
-                      {g.phone ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-text-secondary">
-                      {g.groupName ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {g.rsvpStatus === null ? (
-                        <span className="text-xs px-2 py-0.5 rounded-md bg-warning-light text-warning">
-                          Εκκρεμεί
+                    <span className="text-[#6E6263]">{g.name}</span>
+                    <span className="text-xs text-[#9C9293]">
+                      {g.guestCount} καλεσμέν{g.guestCount === 1 ? "ος" : "οι"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </aside>
+
+        <div className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-[#EDE8E3] bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EDE8E3] p-5">
+            <h2 className="text-base font-semibold text-[#1C1516]">Καλεσμένοι</h2>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={exportExcel}
+                className="rounded-md border border-[#EDE8E3] px-3.5 py-2 text-[13px] font-semibold text-[#6E6263] transition-colors hover:text-[#1C1516]"
+              >
+                Εξαγωγή Excel
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAdd(true)}
+                className="rounded-md bg-[#C4993D] px-3.5 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-[#B38935]"
+              >
+                + Προσθήκη
+              </button>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center py-24">
+              <div className="size-8 animate-spin rounded-full border-2 border-[#C4993D] border-t-transparent" />
+            </div>
+          ) : guests.length === 0 ? (
+            <div className="px-5 py-16 text-center">
+              <p className="mb-4 text-[#9C9293]">Δεν υπάρχουν καλεσμένοι ακόμα.</p>
+              <button
+                type="button"
+                onClick={() => setShowAdd(true)}
+                className="rounded-md bg-[#C4993D] px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-[#B38935]"
+              >
+                + Προσθήκη πρώτου καλεσμένου
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <div className="min-w-[900px]">
+                <div className="flex gap-3 border-b border-[#EDE8E3] bg-[#F9F8F6] px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[#9C9293]">
+                  <span className="min-w-[140px] flex-1">Όνομα</span>
+                  <span className="w-[160px] shrink-0">Email</span>
+                  <span className="w-[110px] shrink-0">Τηλέφωνο</span>
+                  <span className="w-[100px] shrink-0">Ομάδα</span>
+                  <span className="w-[100px] shrink-0">RSVP</span>
+                  <span className="w-[70px] shrink-0">Άτομα</span>
+                  <span className="w-[90px] shrink-0">Πρόσκληση</span>
+                  <span className="w-[100px] shrink-0 text-right">Ενέργειες</span>
+                </div>
+
+                {guests.map((g) => {
+                  const rsvp =
+                    g.rsvpStatus === null
+                      ? RSVP_STYLES.pending
+                      : g.rsvpStatus.attendingReception
+                        ? RSVP_STYLES.confirmed
+                        : RSVP_STYLES.declined;
+
+                  return (
+                    <div
+                      key={g.id}
+                      className="flex items-center gap-3 border-b border-[#EDE8E3] px-5 py-4 last:border-0"
+                    >
+                      <span className="min-w-[140px] flex-1 truncate text-sm font-semibold text-[#1C1516]">
+                        {g.firstName} {g.lastName}
+                      </span>
+                      <span className="w-[160px] shrink-0 truncate text-[13px] text-[#6E6263]">
+                        {g.email ?? "—"}
+                      </span>
+                      <span className="w-[110px] shrink-0 text-[13px] text-[#6E6263]">
+                        {g.phone ?? "—"}
+                      </span>
+                      <span className="w-[100px] shrink-0 truncate text-[13px] text-[#9C9293]">
+                        {g.groupName ?? "—"}
+                      </span>
+                      <span className="w-[100px] shrink-0">
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${rsvp.pill}`}
+                        >
+                          <span className={`size-1.5 rounded-full ${rsvp.dot}`} />
+                          {rsvp.label}
                         </span>
-                      ) : g.rsvpStatus.attendingReception ? (
-                        <span className="text-xs px-2 py-0.5 rounded-md bg-success-light text-success">
-                          Ναι
-                        </span>
-                      ) : (
-                        <span className="text-xs px-2 py-0.5 rounded-md bg-destructive-light text-destructive">
-                          Όχι
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center text-text-secondary">
-                      {g.rsvpStatus
-                        ? `${g.rsvpStatus.adultCount}+${g.rsvpStatus.childrenCount}`
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {g.inviteToken ? (
+                      </span>
+                      <span className="w-[70px] shrink-0 text-[13px] text-[#9C9293]">
+                        {g.rsvpStatus
+                          ? `${g.rsvpStatus.adultCount} + ${g.rsvpStatus.childrenCount}`
+                          : "—"}
+                      </span>
+                      <span className="w-[90px] shrink-0">
+                        {g.inviteToken ? (
+                          <button
+                            type="button"
+                            onClick={() => copyInvite(g.inviteToken!)}
+                            className="rounded-md border border-[#EDE8E3] px-2 py-1 text-[11px] font-semibold text-[#6E6263] hover:text-[#1C1516]"
+                          >
+                            Αντιγραφή
+                          </button>
+                        ) : (
+                          <span className="text-[13px] text-[#9C9293]">—</span>
+                        )}
+                      </span>
+                      <span className="flex w-[100px] shrink-0 items-center justify-end gap-1.5">
                         <button
                           type="button"
-                          onClick={() => copyInvite(g.inviteToken!)}
-                          className="text-xs text-accent cursor-pointer"
+                          onClick={() => setEditingGuest(g)}
+                          className="flex size-[26px] items-center justify-center rounded-md border border-[#EDE8E3] text-[#6E6263] hover:text-[#1C1516]"
+                          aria-label="Επεξεργασία"
                         >
-                          Αντιγραφή
+                          <DashboardIcon name="edit" className="size-3.5" />
                         </button>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right space-x-3">
-                      <button
-                        onClick={() => setEditingGuest(g)}
-                        className="text-xs text-accent hover:text-accent-hover cursor-pointer"
-                      >
-                        Επεξεργασία
-                      </button>
-                      <button
-                        onClick={() => deleteGuest(g.id)}
-                        className="text-xs text-destructive hover:text-destructive/80 cursor-pointer"
-                      >
-                        Διαγραφή
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        <button
+                          type="button"
+                          onClick={() => deleteGuest(g.id)}
+                          className="flex size-[26px] items-center justify-center rounded-md bg-[#FDF0F0] text-[#A82020] hover:bg-[#FBE4E4]"
+                          aria-label="Διαγραφή"
+                        >
+                          <DashboardIcon name="trash" className="size-3.5" />
+                        </button>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
 
-        {showAdd && (
-          <GuestFormModal
-            eventId={eventId}
-            onClose={() => setShowAdd(false)}
-            onSaved={() => {
-              setShowAdd(false);
-              loadGuests();
-            }}
-          />
-        )}
-        {editingGuest && (
-          <GuestFormModal
-            eventId={eventId}
-            guest={editingGuest}
-            onClose={() => setEditingGuest(null)}
-            onSaved={() => {
-              setEditingGuest(null);
-              loadGuests();
-            }}
-          />
-        )}
-      </main>
+      {showAdd ? (
+        <GuestFormModal
+          eventId={eventId}
+          onClose={() => setShowAdd(false)}
+          onSaved={() => {
+            setShowAdd(false);
+            loadGuests();
+          }}
+        />
+      ) : null}
+      {editingGuest ? (
+        <GuestFormModal
+          eventId={eventId}
+          guest={editingGuest}
+          onClose={() => setEditingGuest(null)}
+          onSaved={() => {
+            setEditingGuest(null);
+            loadGuests();
+          }}
+        />
+      ) : null}
+    </main>
+  );
+}
+
+function GuestStatCard({
+  label,
+  value,
+  dotColor,
+  valueClass = "text-[#1C1516]",
+}: {
+  label: string;
+  value: ReactNode;
+  dotColor?: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-[#EDE8E3] bg-white p-4">
+      <div className="flex items-center gap-1.5">
+        {dotColor ? <span className={`size-1.5 rounded-full ${dotColor}`} aria-hidden /> : null}
+        <p className="text-xs font-medium uppercase tracking-wide text-[#6E6263]">{label}</p>
+      </div>
+      <p className={`mt-2 text-2xl font-bold ${valueClass}`}>{value}</p>
     </div>
   );
 }
@@ -454,18 +521,20 @@ function GuestFormModal({
   };
 
   const inputClass =
-    "w-full rounded-lg border border-border bg-bg px-3.5 py-2.5 text-sm text-text-primary outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors";
+    "h-11 w-full rounded-lg border border-[#EDE8E3] bg-[#F9F8F6] px-3.5 text-sm text-[#1C1516] outline-none focus:border-[#C4993D] focus:ring-1 focus:ring-[#C4993D]";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-8 shadow-lg">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="font-display text-xl font-semibold text-text-primary">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+      <div className="w-full max-w-md rounded-2xl border border-[#EDE8E3] bg-white p-8 shadow-[0_8px_24px_rgba(28,21,22,0.08)]">
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="font-display text-xl text-[#1C1516]">
             {guest ? "Επεξεργασία καλεσμένου" : "Νέος καλεσμένος"}
           </h2>
           <button
+            type="button"
             onClick={onClose}
-            className="text-text-muted hover:text-text-primary cursor-pointer text-lg"
+            className="text-lg text-[#9C9293] hover:text-[#1C1516]"
+            aria-label="Κλείσιμο"
           >
             ✕
           </button>
@@ -473,9 +542,7 @@ function GuestFormModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-text-primary">
-                Όνομα
-              </label>
+              <label className="mb-1.5 block text-sm font-medium text-[#1C1516]">Όνομα</label>
               <input
                 type="text"
                 required
@@ -485,9 +552,7 @@ function GuestFormModal({
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-text-primary">
-                Επώνυμο
-              </label>
+              <label className="mb-1.5 block text-sm font-medium text-[#1C1516]">Επώνυμο</label>
               <input
                 type="text"
                 required
@@ -498,9 +563,7 @@ function GuestFormModal({
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-text-primary">
-              Email
-            </label>
+            <label className="mb-1.5 block text-sm font-medium text-[#1C1516]">Email</label>
             <input
               type="email"
               value={form.email}
@@ -509,9 +572,7 @@ function GuestFormModal({
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-text-primary">
-              Τηλέφωνο
-            </label>
+            <label className="mb-1.5 block text-sm font-medium text-[#1C1516]">Τηλέφωνο</label>
             <input
               type="tel"
               value={form.phone}
@@ -519,19 +580,21 @@ function GuestFormModal({
               className={inputClass}
             />
           </div>
-          <label className="flex items-center gap-2 text-sm text-text-secondary">
+          <label className="flex items-center gap-2 text-sm text-[#6E6263]">
             <input
               type="checkbox"
               checked={form.isCeremonyOnly}
               onChange={(e) => update("isCeremonyOnly", e.target.checked)}
+              className="size-[18px] rounded border-[#EDE8E3] accent-[#C4993D]"
             />
             Μόνο τελετή
           </label>
-          <label className="flex items-center gap-2 text-sm text-text-secondary">
+          <label className="flex items-center gap-2 text-sm text-[#6E6263]">
             <input
               type="checkbox"
               checked={form.isReceptionEligible}
               onChange={(e) => update("isReceptionEligible", e.target.checked)}
+              className="size-[18px] rounded border-[#EDE8E3] accent-[#C4993D]"
             />
             Δεξίωση
           </label>
@@ -539,14 +602,14 @@ function GuestFormModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-text-primary hover:bg-bg transition-colors cursor-pointer"
+              className="flex-1 rounded-lg border border-[#EDE8E3] px-4 py-2.5 text-sm font-medium text-[#1C1516] hover:bg-[#F9F8F6]"
             >
               Ακύρωση
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="flex-1 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50 transition-colors cursor-pointer"
+              className="flex-1 rounded-lg bg-[#C4993D] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#B38935] disabled:opacity-50"
             >
               {submitting ? "Αποθήκευση..." : guest ? "Αποθήκευση" : "Προσθήκη"}
             </button>

@@ -21,9 +21,10 @@ public class EventsController(
     public async Task<IActionResult> GetAll()
     {
         if (tenantContext.TenantId is null) return Forbid();
+        var tenantId = tenantContext.TenantId.Value;
 
         var events = await db.Events
-            .Where(e => e.TenantId == tenantContext.TenantId)
+            .Where(e => e.TenantId == tenantId)
             .Select(e => new
             {
                 e.Id,
@@ -37,7 +38,16 @@ public class EventsController(
                 e.PublishedAt,
                 e.CreatedAt,
                 VenueCount = e.Venues.Count,
-                PersonCount = e.Persons.Count
+                PersonCount = e.Persons.Count,
+                GuestCount = e.Guests.Count(g => !g.IsDeleted),
+                ConfirmedRsvpCount = e.Rsvps.Count(r => r.AttendingReception == true),
+                PackageName = db.Subscriptions
+                    .Where(s => s.EventId == e.Id
+                                && s.TenantId == tenantId
+                                && s.Status == SubscriptionStatus.Active)
+                    .OrderByDescending(s => s.ActivatedAt ?? s.CreatedAt)
+                    .Select(s => s.Package.DisplayName)
+                    .FirstOrDefault()
             })
             .ToListAsync();
 
@@ -149,6 +159,39 @@ public class EventsController(
         return Ok(new { evt.Id, evt.Title, Status = evt.Status.ToString() });
     }
 
+    /// <summary>Set event cover from an existing owner media image.</summary>
+    [HttpPut("{id:guid}/cover")]
+    public async Task<IActionResult> SetCover(Guid id, [FromBody] SetCoverRequest request)
+    {
+        if (tenantContext.TenantId is null) return Forbid();
+
+        var evt = await db.Events
+            .Where(e => e.Id == id && e.TenantId == tenantContext.TenantId)
+            .FirstOrDefaultAsync();
+        if (evt is null) return NotFound();
+
+        if (string.IsNullOrWhiteSpace(request.MediaId) || !Guid.TryParse(request.MediaId, out var mediaId))
+            return BadRequest(new ProblemDetails { Title = "MediaId is required." });
+
+        var media = await db.MediaFiles.FirstOrDefaultAsync(m =>
+            m.Id == mediaId
+            && m.EventId == id
+            && m.TenantId == tenantContext.TenantId
+            && m.MediaType == MediaType.Image
+            && !m.IsGuestUpload);
+        if (media is null)
+            return NotFound(new ProblemDetails { Title = "Image not found." });
+
+        evt.CoverImageUrl = media.StoredFileName;
+        await db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            evt.Id,
+            CoverImageUrl = fileStorage.GetFileUrl(media.StoredFileName)
+        });
+    }
+
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
@@ -258,5 +301,7 @@ public record UpdateEventRequest(
     string? Description,
     string? Locale
 );
+
+public record SetCoverRequest(string MediaId);
 
 public record UpdateStatusRequest(EventStatus Status);

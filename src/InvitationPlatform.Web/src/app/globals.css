@@ -51,7 +51,72 @@
   --radius-lg: var(--radius-lg);
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 body {
   background-color: var(--color-bg);
   color: var(--color-text-primary);
 }
+
+.landing {
+  --landing-burgundy: #4a1221;
+  --landing-gold: #c39c5e;
+  --landing-cream: #fbf9f4;
+  --landing-warm: #f4ede2;
+  --landing-ink: #1f0f12;
+  --landing-muted: #6e5b60;
+  --landing-border: #eadfcb;
+}
+
+.dashboard {
+  --dashboard-sidebar: #3a1112;
+  --dashboard-gold: #c4993d;
+  --dashboard-bg: #f9f8f6;
+  --dashboard-border: #ede8e3;
+  --dashboard-ink: #1c1516;
+  --dashboard-muted: #6e6263;
+}
+
+.invitation-skin-birthday time {
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.invitation-skin-classic .classic-rsvp label,
+.invitation-skin-classic .classic-rsvp legend {
+  font-size: 9px;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 400;
+}
+
+.invitation-skin-classic .classic-rsvp input,
+.invitation-skin-classic .classic-rsvp select,
+.invitation-skin-classic .classic-rsvp textarea {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  color: #fff !important;
+  border-radius: 2px;
+}
+
+.invitation-skin-classic .classic-rsvp input::placeholder,
+.invitation-skin-classic .classic-rsvp textarea::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.invitation-skin-classic .classic-rsvp button[type="submit"] {
+  background: #fff !important;
+  color: #2e5a4c !important;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 500;
+  border-radius: 2px;
+}
+

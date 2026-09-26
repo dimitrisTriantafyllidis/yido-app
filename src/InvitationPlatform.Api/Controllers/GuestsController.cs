@@ -1,7 +1,10 @@
 using ClosedXML.Excel;
+using Hangfire;
 using InvitationPlatform.Application.Common;
 using InvitationPlatform.Application.Common.Interfaces;
 using InvitationPlatform.Domain.Entities;
+using InvitationPlatform.Domain.Enums;
+using InvitationPlatform.Infrastructure.Jobs;
 using InvitationPlatform.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -40,8 +43,12 @@ public class GuestsController(
                 g.Tags,
                 g.Notes,
                 g.InviteToken,
+                g.InvitationSentAt,
                 GroupName = g.GuestGroup != null ? g.GuestGroup.Name : null,
                 g.GuestGroupId,
+                g.EventTableId,
+                TableName = g.EventTable != null ? g.EventTable.Name : null,
+                g.SeatIndex,
                 RsvpStatus = g.Rsvps.OrderByDescending(r => r.SubmittedAt)
                     .Select(r => new { r.AttendingReception, r.AdultCount, r.ChildrenCount })
                     .FirstOrDefault()
@@ -247,7 +254,120 @@ public class GuestsController(
 
         return NoContent();
     }
+
+    /// <summary>Send invitation emails to selected guests or all guests with email addresses.</summary>
+    [HttpPost("send-invitations")]
+    public async Task<IActionResult> SendInvitations(Guid eventId, [FromBody] SendInvitationsRequest request)
+    {
+        if (tenantContext.TenantId is null) return Forbid();
+        var tenantId = tenantContext.TenantId.Value;
+
+        var evt = await db.Events
+            .Where(e => e.Id == eventId && e.TenantId == tenantId)
+            .Select(e => new { e.Status, e.Slug })
+            .FirstOrDefaultAsync();
+
+        if (evt is null) return NotFound();
+        if (evt.Status != EventStatus.Published || string.IsNullOrWhiteSpace(evt.Slug))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Η εκδήλωση δεν είναι δημοσιευμένη",
+                Detail = "Πρέπει πρώτα να δημοσιεύσετε την πρόσκληση πριν στείλετε emails.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        int maxEmails;
+        try
+        {
+            maxEmails = await entitlements.GetIntegerLimitAsync(tenantId, eventId, "max_emails");
+        }
+        catch
+        {
+            maxEmails = 0;
+        }
+
+        if (maxEmails <= 0)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new ProblemDetails
+            {
+                Title = "Η αποστολή email δεν είναι διαθέσιμη",
+                Detail = "Αναβαθμίστε σε πακέτο Digital ή Video για να αποστείλετε προσκλήσεις μέσω email.",
+                Status = StatusCodes.Status403Forbidden
+            });
+        }
+
+        var query = db.Guests
+            .Where(g => g.EventId == eventId && g.TenantId == tenantId && !string.IsNullOrEmpty(g.Email));
+
+        if (request.GuestIds is { Count: > 0 })
+        {
+            query = query.Where(g => request.GuestIds.Contains(g.Id));
+        }
+        else if (!request.SendToAll)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Παρακαλώ επιλέξτε καλεσμένους",
+                Detail = "Πρέπει να επιλέξετε καλεσμένους ή να ορίσετε sendToAll: true.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        if (request.OnlyUnsent)
+        {
+            query = query.Where(g => g.InvitationSentAt == null);
+        }
+
+        var guestsToSend = await query
+            .Select(g => new { g.Id, g.Email })
+            .ToListAsync();
+
+        if (guestsToSend.Count == 0)
+        {
+            return Ok(new { queued = 0, message = "Δεν βρέθηκαν καλεσμένοι με email για αποστολή." });
+        }
+
+        var alreadySentCount = await db.Guests
+            .Where(g => g.EventId == eventId && g.TenantId == tenantId && g.InvitationSentAt != null)
+            .CountAsync();
+
+        var remaining = Math.Max(0, maxEmails - alreadySentCount);
+        if (guestsToSend.Count > remaining)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new ProblemDetails
+            {
+                Title = "Υπέρβαση ορίου email",
+                Detail = $"Μπορείτε να στείλετε ακόμη {remaining} emails (όριο: {maxEmails}). Ζητήσατε αποστολή σε {guestsToSend.Count} καλεσμένους.",
+                Status = StatusCodes.Status403Forbidden
+            });
+        }
+
+        foreach (var g in guestsToSend)
+        {
+            BackgroundJob.Enqueue<HangfireJobRunner>(j => j.SendInvitationEmail(g.Id));
+        }
+
+        await audit.LogAsync(
+            "guests.send_invitations",
+            actorUserId: tenantContext.UserId,
+            tenantId: tenantId,
+            eventId: eventId,
+            entityType: "Event",
+            entityId: eventId.ToString(),
+            details: System.Text.Json.JsonSerializer.Serialize(new { count = guestsToSend.Count }),
+            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString());
+
+        return Ok(new { queued = guestsToSend.Count, message = $"Αποστέλλονται {guestsToSend.Count} προσκλήσεις..." });
+    }
 }
+
+public record SendInvitationsRequest(
+    List<Guid>? GuestIds = null,
+    bool SendToAll = false,
+    bool OnlyUnsent = true
+);
 
 public record CreateGuestRequest(
     string FirstName,

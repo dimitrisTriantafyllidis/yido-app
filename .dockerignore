@@ -1,16 +1,43 @@
-**/.git
-**/.vs
-**/.vscode
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vs
+.vscode
+*.user
+*.suo
+
+# Build outputs
 **/bin
 **/obj
-**/node_modules
+**/out
 **/.next
-**/wwwroot/uploads
-*.md
-*.sln
-.github
-.claude
+**/node_modules
+
+# Test results
+**/TestResults
+
+# Local development
+.run-api
+appsettings.Development.json
+.env
+.env.local
+.env*.local
+
+# Documentation
 docs
-tests
-scripts
-docker
+*.md
+!README.md
+
+# CI/CD
+.github
+
+# Infrastructure (don't need in container)
+infra
+
+# Misc
+*.log
+Thumbs.db
+.DS_Store

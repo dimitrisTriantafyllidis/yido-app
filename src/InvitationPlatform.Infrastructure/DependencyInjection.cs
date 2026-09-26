@@ -44,10 +44,23 @@ public static class DependencyInjection
         services.ConfigureApplicationCookie(options =>
         {
             options.Cookie.HttpOnly = true;
-            options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax;
             options.Cookie.Name = "yido.auth";
             options.ExpireTimeSpan = TimeSpan.FromHours(8);
             options.SlidingExpiration = true;
+
+            // Web and API are different hosts on Azure; cookies must be sent cross-site.
+            var envName = configuration["ASPNETCORE_ENVIRONMENT"] ?? "";
+            var hosted = envName.Equals("Staging", StringComparison.OrdinalIgnoreCase)
+                         || envName.Equals("Production", StringComparison.OrdinalIgnoreCase);
+            if (hosted)
+            {
+                options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.None;
+                options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.Always;
+            }
+            else
+            {
+                options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax;
+            }
             options.Events.OnRedirectToLogin = context =>
             {
                 context.Response.StatusCode = 401;
@@ -66,11 +79,33 @@ public static class DependencyInjection
 
         services.AddScoped<ITenantContext, TenantContext>();
         services.AddScoped<IFeatureEntitlementService, FeatureEntitlementService>();
-        services.AddScoped<IEmailSender, SmtpEmailSender>();
+        
+        // Email sender: use SendGrid in production, SMTP (Mailpit) in development
+        var emailProvider = configuration["Email:Provider"]?.ToLowerInvariant();
+        if (emailProvider == "sendgrid" && !string.IsNullOrWhiteSpace(configuration["Email:SendGrid:ApiKey"]))
+        {
+            services.AddScoped<IEmailSender, SendGridEmailSender>();
+        }
+        else
+        {
+            services.AddScoped<IEmailSender, SmtpEmailSender>();
+        }
+        
         services.AddScoped<IStripeCheckoutService, StripeCheckoutService>();
         services.AddSingleton<IQrCodeService, QrCodeService>();
         services.AddScoped<IAuditService, AuditService>();
         services.AddScoped<Jobs.HangfireJobRunner>();
+
+        // Turnstile CAPTCHA: enabled if SecretKey is configured
+        services.AddHttpClient("Turnstile");
+        if (!string.IsNullOrWhiteSpace(configuration["Captcha:Turnstile:SecretKey"]))
+        {
+            services.AddScoped<ITurnstileService, TurnstileService>();
+        }
+        else
+        {
+            services.AddScoped<ITurnstileService, NoOpTurnstileService>();
+        }
 
         return services;
     }

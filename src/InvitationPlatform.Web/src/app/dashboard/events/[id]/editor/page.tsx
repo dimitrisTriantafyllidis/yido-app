@@ -2,8 +2,24 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth-context";
+import { useParams } from "next/navigation";
+import { DashboardIcon } from "@/components/dashboard/dashboard-icons";
+import { WeddingTemplateEditor } from "@/components/invitations/WeddingTemplateEditor";
+import { isWeddingStyleId } from "@/components/invitations/types";
+import type { InvitationPerson } from "@/components/invitations/types";
+import {
+  PersonsEditor,
+  QuizQuestionsEditor,
+  VendorsEditor,
+  WishesInbox,
+} from "@/components/invitations/ExtraSectionEditors";
+import {
+  parseQuizQuestions,
+  parseVendors,
+  type GuestWishItem,
+  type QuizQuestionConfig,
+  type VendorConfig,
+} from "@/components/invitations/extra-section-config";
 import { api } from "@/lib/api";
 
 interface ThemeData {
@@ -34,7 +50,7 @@ interface InvitationData {
   versionNumber: number;
   isPublished: boolean;
   publishedAt: string | null;
-  template: { id: string; name: string; eventType: string };
+  template: { id: string; name: string; eventType: string; category?: string | null };
   theme: ThemeData | null;
   sections: SectionData[];
 }
@@ -45,6 +61,7 @@ interface TemplateListItem {
   description: string;
   eventType: string;
   category: string;
+  previewImageUrl?: string | null;
   isPremium: boolean;
   sectionCount: number;
 }
@@ -57,6 +74,15 @@ interface ThemeListItem {
   accentColor: string;
   isPremium: boolean;
 }
+
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  Wedding: "Γάμος",
+  Baptism: "Βάπτιση",
+  Party: "Γενέθλια / Πάρτι",
+  Engagement: "Αρραβώνας",
+  Corporate: "Εταιρική",
+  Custom: "Άλλο",
+};
 
 const SECTION_LABELS: Record<string, string> = {
   hero: "Κεντρική εικόνα",
@@ -71,12 +97,13 @@ const SECTION_LABELS: Record<string, string> = {
   video: "Βίντεο",
   audio: "Μουσική",
   footer: "Υποσέλιδο",
+  quiz: "Κουίζ",
+  wishes: "Ευχές",
+  vendors: "Συνεργάτες",
 };
 
 export default function EditorPage() {
   const params = useParams();
-  const router = useRouter();
-  const { logout } = useAuth();
   const eventId = params.id as string;
 
   const [invitation, setInvitation] = useState<InvitationData | null>(null);
@@ -93,6 +120,8 @@ export default function EditorPage() {
   );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  const [eventType, setEventType] = useState<string | null>(null);
 
   const loadInvitation = useCallback(async () => {
     try {
@@ -115,10 +144,17 @@ export default function EditorPage() {
   }, [loadInvitation]);
 
   useEffect(() => {
+    api<{ eventType: string }>(`/api/v1/events/${eventId}`)
+      .then((e) => setEventType(e.eventType))
+      .catch(() => setEventType(null));
+  }, [eventId]);
+
+  useEffect(() => {
     if (needsTemplate) {
-      api<TemplateListItem[]>("/api/v1/templates").then(setTemplates);
+      const qs = eventType ? `?eventType=${encodeURIComponent(eventType)}` : "";
+      api<TemplateListItem[]>(`/api/v1/templates${qs}`).then(setTemplates);
     }
-  }, [needsTemplate]);
+  }, [needsTemplate, eventType]);
 
   const loadThemes = async () => {
     const data = await api<ThemeListItem[]>("/api/v1/templates/themes");
@@ -146,6 +182,23 @@ export default function EditorPage() {
       body: JSON.stringify({ themeId }),
     });
     loadInvitation();
+  };
+
+  const changeTemplate = async (templateId: string) => {
+    if (!confirm("Η αλλαγή προτύπου θα αντικαταστήσει τις τρέχουσες ενότητες. Θέλετε να συνεχίσετε;")) {
+      return;
+    }
+    await api(`/api/v1/events/${eventId}/invitation/template`, {
+      method: "PATCH",
+      body: JSON.stringify({ templateId }),
+    });
+    loadInvitation();
+  };
+
+  const loadTemplates = async () => {
+    const qs = eventType ? `?eventType=${encodeURIComponent(eventType)}` : "";
+    const data = await api<TemplateListItem[]>(`/api/v1/templates${qs}`);
+    setTemplates(data);
   };
 
   const toggleSection = async (section: SectionData) => {
@@ -206,8 +259,8 @@ export default function EditorPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      <div className="flex min-h-screen items-center justify-center bg-[#F9F8F6]">
+        <div className="size-8 animate-spin rounded-full border-2 border-[#C4993D] border-t-transparent" />
       </div>
     );
   }
@@ -215,299 +268,346 @@ export default function EditorPage() {
   // Template selection screen
   if (needsTemplate) {
     return (
-      <div className="min-h-screen bg-bg">
-        <header className="border-b border-border bg-surface">
-          <div className="max-w-4xl mx-auto px-6 h-14 flex items-center">
-            <Link
-              href={`/dashboard/events/${eventId}`}
-              className="text-sm text-text-secondary hover:text-text-primary transition-colors"
-            >
-              ← Πίσω στην εκδήλωση
-            </Link>
-          </div>
-        </header>
-        <main className="max-w-4xl mx-auto px-6 py-10">
-          <h1 className="font-display text-2xl font-semibold text-text-primary mb-2">
-            Επιλέξτε πρότυπο
-          </h1>
-          <p className="text-text-secondary mb-8">
+      <main className="flex flex-col gap-8 px-6 py-10 pb-12 md:px-12">
+        <Link
+          href={`/dashboard/events/${eventId}`}
+          className="inline-flex items-center gap-2 text-sm font-medium text-[#C4993D] hover:text-[#A87D2C]"
+        >
+          <DashboardIcon name="arrow-left" className="size-3.5" />
+          Πίσω στην εκδήλωση
+        </Link>
+        <div>
+          <h1 className="font-display text-[32px] text-[#1C1516]">Επιλέξτε πρότυπο</h1>
+          <p className="mt-1 text-sm text-[#6E6263]">
             Διαλέξτε ένα πρότυπο για την πρόσκλησή σας
           </p>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {templates.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => selectTemplate(t.id)}
-                className="text-left bg-surface border border-border rounded-xl p-6 hover:border-accent/40 hover:shadow-sm transition-all cursor-pointer"
-              >
-                <div className="w-full h-32 rounded-lg bg-accent-light mb-4 flex items-center justify-center">
-                  <span className="text-accent text-sm font-medium">
-                    Προεπισκόπηση
-                  </span>
-                </div>
-                <h3 className="font-display text-lg font-semibold text-text-primary">
-                  {t.name}
-                </h3>
-                <p className="text-sm text-text-secondary mt-1">
-                  {t.description}
-                </p>
-                <div className="flex gap-3 mt-3 text-xs text-text-muted">
-                  <span>{t.eventType}</span>
-                  <span>{t.sectionCount} ενότητες</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </main>
-      </div>
+        </div>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {templates.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => selectTemplate(t.id)}
+              className="cursor-pointer rounded-xl border border-[#EDE8E3] bg-white p-6 text-left transition-all hover:border-[#C4993D]/40 hover:shadow-sm"
+            >
+              <div className="mb-4 flex h-40 w-full items-center justify-center overflow-hidden rounded-lg bg-[#F9F8F6]">
+                {t.previewImageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={t.previewImageUrl}
+                    alt=""
+                    className="h-full w-full object-cover object-center"
+                  />
+                ) : (
+                  <span className="text-sm font-medium text-[#C4993D]">Προεπισκόπηση</span>
+                )}
+              </div>
+              <h3 className="font-display text-lg text-[#1C1516]">{t.name}</h3>
+              <p className="mt-1 text-sm text-[#6E6263]">{t.description}</p>
+              <div className="mt-3 flex gap-3 text-xs text-[#9C9293]">
+                <span>{EVENT_TYPE_LABELS[t.eventType] ?? t.eventType}</span>
+                <span>{t.sectionCount} ενότητες</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </main>
     );
   }
 
   if (!invitation) return null;
 
+  const weddingCategory = invitation.template.category;
+  if (isWeddingStyleId(weddingCategory)) {
+    return (
+      <WeddingTemplateEditor
+        eventId={eventId}
+        invitation={invitation}
+        styleId={weddingCategory}
+        onInvitationChange={(next) => setInvitation(next)}
+      />
+    );
+  }
+
   const enabledSections = invitation.sections.filter((s) => s.isEnabled);
-  const config = selectedSection?.configurationJson
-    ? JSON.parse(selectedSection.configurationJson)
-    : {};
+
+  const previewContent = (
+    <div
+      className={`overflow-hidden transition-all ${
+        previewMode === "mobile" ? "w-full" : "w-full max-w-3xl rounded-xl border border-[#EDE8E3] shadow-sm"
+      }`}
+      style={
+        invitation.theme
+          ? ({
+              fontFamily: `${invitation.theme.bodyFontFamily}, sans-serif`,
+              backgroundColor: invitation.theme.backgroundColor,
+              color: invitation.theme.textColor,
+            } as React.CSSProperties)
+          : {}
+      }
+    >
+      {enabledSections.map((section) => (
+        <SectionPreview
+          key={section.id}
+          section={section}
+          theme={invitation.theme}
+          isSelected={selectedSection?.id === section.id}
+          onClick={() => setSelectedSection(section)}
+        />
+      ))}
+    </div>
+  );
 
   return (
-    <div className="flex h-screen flex-col bg-bg">
-      {/* Top bar */}
-      <header className="flex h-12 items-center justify-between border-b border-border bg-surface px-4 shrink-0">
-        <div className="flex items-center gap-4">
+    <div className="flex h-screen flex-col overflow-hidden bg-[#F9F8F6]">
+      <header className="flex shrink-0 items-center justify-between border-b border-[#EDE8E3] bg-white px-8 py-4">
+        <div className="flex items-center gap-3">
           <Link
             href={`/dashboard/events/${eventId}`}
-            className="text-sm text-text-secondary hover:text-text-primary transition-colors"
+            className="text-sm font-medium text-[#9C9293] transition-colors hover:text-[#1C1516]"
           >
             ← Πίσω
           </Link>
-          <span className="text-sm font-medium text-text-primary">
+          <span className="h-4 w-px bg-[#EDE8E3]" aria-hidden />
+          <h1 className="font-display text-xl text-[#1C1516]">
             {invitation.template.name}
-          </span>
-          {saving && (
-            <span className="text-xs text-text-muted">Αποθήκευση...</span>
-          )}
-          {saved && (
-            <span className="text-xs text-success">Αποθηκεύτηκε</span>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
+          </h1>
           <span
-            className={`text-xs px-2 py-1 rounded-md ${
+            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
               invitation.isPublished
-                ? "bg-success-light text-success"
-                : "bg-warning-light text-warning"
+                ? "bg-[#E3F3EA] text-[#1B5E3A]"
+                : "bg-[#FDF2F2] text-[#C43D41]"
             }`}
           >
-            {invitation.isPublished ? "Δημοσιευμένη" : "Πρόχειρη"}
+            <span
+              className={`size-1.5 rounded-full ${
+                invitation.isPublished ? "bg-[#1B5E3A]" : "bg-[#C43D41]"
+              }`}
+              aria-hidden
+            />
+            {invitation.isPublished ? "Published" : "Draft"}
           </span>
-          {publishedSlug && (
+          {saving ? (
+            <span className="text-xs text-[#9C9293]">Αποθήκευση...</span>
+          ) : null}
+          {saved ? (
+            <span className="text-xs font-medium text-[#1B5E3A]">Αποθηκεύτηκε</span>
+          ) : null}
+        </div>
+
+        <div className="flex items-center gap-3">
+          {publishedSlug ? (
             <Link
               href={`/e/${publishedSlug}`}
               target="_blank"
-              className="px-3 py-1.5 text-sm font-medium text-accent border border-accent rounded-lg hover:bg-accent-light transition-colors"
+              className="rounded-md border border-[#EDE8E3] px-4 py-2 text-[13px] font-semibold text-[#6E6263] transition-colors hover:text-[#1C1516]"
             >
               Άνοιγμα πρόσκλησης
             </Link>
-          )}
-          {!invitation.isPublished && (
+          ) : null}
+          {!invitation.isPublished ? (
             <button
+              type="button"
               onClick={publishInvitation}
-              className="px-4 py-1.5 text-sm font-medium text-white bg-accent rounded-lg hover:bg-accent-hover transition-colors cursor-pointer"
+              className="rounded-md bg-[#C4993D] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-[#B38935]"
             >
               Δημοσίευση
             </button>
-          )}
-          {invitation.isPublished && !publishedSlug && (
+          ) : (
             <button
+              type="button"
               onClick={publishInvitation}
-              className="px-3 py-1.5 text-sm font-medium text-accent border border-accent rounded-lg hover:bg-accent-light transition-colors cursor-pointer"
+              className="rounded-md border border-[#C4993D] px-4 py-2 text-[13px] font-semibold text-[#C4993D] transition-colors hover:bg-[#C4993D]/5"
             >
               Ανανέωση δημοσίευσης
             </button>
           )}
-          <button
-            onClick={logout}
-            className="text-xs text-text-muted hover:text-text-primary cursor-pointer"
-          >
-            Αποσύνδεση
-          </button>
         </div>
       </header>
 
-      {/* Editor layout */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left sidebar - sections */}
-        <div className="w-60 border-r border-border bg-surface overflow-y-auto shrink-0">
-          <div className="p-4">
-            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
-              Ενότητες
-            </h3>
-            <div className="space-y-1">
-              {invitation.sections.map((section) => (
-                <div key={section.id} className="flex items-center gap-2">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <aside className="flex w-[240px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-[#EDE8E3] bg-white p-6">
+          <p className="text-xs font-bold uppercase tracking-wide text-[#9C9293]">
+            Ενότητες πρόσκλησης
+          </p>
+
+          <div className="flex flex-col gap-0.5">
+            {invitation.sections.map((section) => {
+              const isSelected = selectedSection?.id === section.id;
+              const label =
+                SECTION_LABELS[section.sectionType] ?? section.sectionType;
+
+              return (
+                <div
+                  key={section.id}
+                  className={`flex items-center justify-between rounded-md px-2.5 py-2 ${
+                    isSelected ? "bg-[#F9F8F6]" : ""
+                  }`}
+                >
                   <button
-                    onClick={() => toggleSection(section)}
-                    className={`w-4 h-4 rounded border shrink-0 cursor-pointer ${
-                      section.isEnabled
-                        ? "bg-accent border-accent"
-                        : "border-border-strong"
+                    type="button"
+                    onClick={() => setSelectedSection(section)}
+                    className={`flex-1 text-left text-[13px] transition-colors ${
+                      isSelected
+                        ? "font-semibold text-[#1C1516]"
+                        : section.isEnabled
+                          ? "font-medium text-[#6E6263] hover:text-[#1C1516]"
+                          : "font-medium text-[#9C9293] hover:text-[#6E6263]"
                     }`}
                   >
-                    {section.isEnabled && (
-                      <svg
-                        viewBox="0 0 12 12"
-                        className="w-full h-full text-white"
-                      >
-                        <path
-                          d="M3 6l2 2 4-4"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          fill="none"
-                        />
-                      </svg>
+                    {label}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(section)}
+                    className="ml-2 shrink-0 p-0.5"
+                    aria-label={section.isEnabled ? `Απενεργοποίηση ${label}` : `Ενεργοποίηση ${label}`}
+                  >
+                    {section.isEnabled ? (
+                      <DashboardIcon name="check" className="size-3.5 text-[#C4993D]" />
+                    ) : (
+                      <span className="inline-block size-3.5" aria-hidden />
                     )}
                   </button>
-                  <button
-                    onClick={() => setSelectedSection(section)}
-                    className={`flex-1 text-left px-2 py-1.5 rounded text-sm transition-colors cursor-pointer ${
-                      selectedSection?.id === section.id
-                        ? "bg-accent-light text-accent font-medium"
-                        : section.isEnabled
-                          ? "text-text-primary hover:bg-bg"
-                          : "text-text-muted hover:bg-bg"
-                    }`}
-                  >
-                    {SECTION_LABELS[section.sectionType] ??
-                      section.sectionType}
-                  </button>
                 </div>
-              ))}
+              );
+            })}
+          </div>
+
+          <div className="h-px bg-[#EDE8E3]" />
+
+          <div className="flex flex-col gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#9C9293]">
+              Θέμα πρόσκλησης
+            </p>
+            <div className="relative">
+              <select
+                value={invitation.theme?.id ?? ""}
+                onFocus={() => {
+                  if (themes.length === 0) loadThemes();
+                }}
+                onChange={(e) => {
+                  if (e.target.value) changeTheme(e.target.value);
+                }}
+                className="w-full appearance-none rounded-md border border-[#EDE8E3] bg-white px-3 py-2 pr-8 text-[13px] font-medium text-[#1C1516] outline-none focus:border-[#C4993D] focus:ring-1 focus:ring-[#C4993D]"
+              >
+                <option value="" disabled>
+                  {invitation.theme?.name ?? "Επιλογή θέματος"}
+                </option>
+                {(themes.length > 0 ? themes : invitation.theme ? [{
+                  id: invitation.theme.id,
+                  name: invitation.theme.name,
+                  primaryColor: invitation.theme.primaryColor,
+                  backgroundColor: invitation.theme.backgroundColor,
+                  accentColor: invitation.theme.accentColor,
+                  isPremium: false,
+                }] : []).map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <DashboardIcon
+                name="chevron-down"
+                className="pointer-events-none absolute right-3 top-1/2 size-3 -translate-y-1/2 text-[#9C9293]"
+              />
             </div>
           </div>
 
-          {/* Theme selector */}
-          <div className="p-4 border-t border-border">
-            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
-              Θέμα
-            </h3>
-            <button
-              onClick={() => {
-                if (themes.length === 0) loadThemes();
-              }}
-              className="w-full text-left px-3 py-2 text-sm bg-bg rounded-lg border border-border hover:border-accent/30 transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                {invitation.theme && (
-                  <div
-                    className="w-4 h-4 rounded-full border"
-                    style={{
-                      backgroundColor: invitation.theme.primaryColor,
-                    }}
-                  />
-                )}
-                <span className="text-text-primary">
-                  {invitation.theme?.name ?? "Επιλογή θέματος"}
-                </span>
-              </div>
-            </button>
-            {themes.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {themes.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => changeTheme(t.id)}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors cursor-pointer ${
-                      invitation.theme?.id === t.id
-                        ? "bg-accent-light text-accent"
-                        : "hover:bg-bg text-text-primary"
-                    }`}
-                  >
-                    <div
-                      className="w-4 h-4 rounded-full border"
-                      style={{ backgroundColor: t.primaryColor }}
-                    />
-                    {t.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+          <div className="h-px bg-[#EDE8E3]" />
 
-        {/* Center - preview */}
-        <div className="flex-1 flex flex-col items-center overflow-y-auto bg-bg p-6">
-          <div className="flex gap-2 mb-4">
+          <div className="flex flex-col gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#9C9293]">
+              Πρότυπο πρόσκλησης
+            </p>
+            <div className="relative">
+              <select
+                value={invitation.template.id}
+                onFocus={() => {
+                  if (templates.length === 0) loadTemplates();
+                }}
+                onChange={(e) => {
+                  if (e.target.value && e.target.value !== invitation.template.id) {
+                    changeTemplate(e.target.value);
+                  }
+                }}
+                className="w-full appearance-none rounded-md border border-[#EDE8E3] bg-white px-3 py-2 pr-8 text-[13px] font-medium text-[#1C1516] outline-none focus:border-[#C4993D] focus:ring-1 focus:ring-[#C4993D]"
+              >
+                <option value={invitation.template.id}>
+                  {invitation.template.name}
+                </option>
+                {templates
+                  .filter((t) => t.id !== invitation.template.id)
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} {t.isPremium ? "⭐" : ""}
+                    </option>
+                  ))}
+              </select>
+              <DashboardIcon
+                name="chevron-down"
+                className="pointer-events-none absolute right-3 top-1/2 size-3 -translate-y-1/2 text-[#9C9293]"
+              />
+            </div>
+            <p className="text-[10px] text-[#9C9293]">
+              Η αλλαγή θα επαναφέρει τις ενότητες στις προεπιλογές
+            </p>
+          </div>
+        </aside>
+
+        <div className="flex min-w-0 flex-1 flex-col items-center overflow-y-auto px-6 pb-12 pt-8">
+          <div className="mb-5 flex rounded-lg bg-[#EDE8E3] p-0.5">
             <button
+              type="button"
               onClick={() => setPreviewMode("mobile")}
-              className={`px-3 py-1 text-xs font-medium rounded-md cursor-pointer ${
+              className={`rounded-md px-3 py-1.5 text-xs transition-colors ${
                 previewMode === "mobile"
-                  ? "bg-accent text-white"
-                  : "bg-surface text-text-secondary border border-border"
+                  ? "bg-white font-semibold text-[#1C1516] shadow-sm"
+                  : "font-medium text-[#6E6263]"
               }`}
             >
               Κινητό
             </button>
             <button
+              type="button"
               onClick={() => setPreviewMode("desktop")}
-              className={`px-3 py-1 text-xs font-medium rounded-md cursor-pointer ${
+              className={`rounded-md px-3 py-1.5 text-xs transition-colors ${
                 previewMode === "desktop"
-                  ? "bg-accent text-white"
-                  : "bg-surface text-text-secondary border border-border"
+                  ? "bg-white font-semibold text-[#1C1516] shadow-sm"
+                  : "font-medium text-[#6E6263]"
               }`}
             >
               Υπολογιστής
             </button>
           </div>
-          <div
-            className={`bg-white border border-border rounded-xl shadow-sm overflow-hidden transition-all ${
-              previewMode === "mobile" ? "w-[390px]" : "w-full max-w-3xl"
-            }`}
-            style={
-              invitation.theme
-                ? ({
-                    "--preview-bg": invitation.theme.backgroundColor,
-                    "--preview-text": invitation.theme.textColor,
-                    "--preview-primary": invitation.theme.primaryColor,
-                    "--preview-surface": invitation.theme.surfaceColor,
-                    "--preview-accent": invitation.theme.accentColor,
-                    fontFamily: `${invitation.theme.bodyFontFamily}, sans-serif`,
-                    backgroundColor: invitation.theme.backgroundColor,
-                    color: invitation.theme.textColor,
-                  } as React.CSSProperties)
-                : {}
-            }
-          >
-            {enabledSections.map((section) => (
-              <SectionPreview
-                key={section.id}
-                section={section}
-                theme={invitation.theme}
-                isSelected={selectedSection?.id === section.id}
-                onClick={() => setSelectedSection(section)}
-              />
-            ))}
-          </div>
+
+          {previewMode === "mobile" ? (
+            <div className="h-[520px] w-[300px] shrink-0 rounded-[36px] border-8 border-[#1C1516] bg-white p-2 shadow-[0_16px_16px_rgba(28,21,22,0.02)]">
+              <div className="size-full overflow-hidden rounded-[26px]">{previewContent}</div>
+            </div>
+          ) : (
+            previewContent
+          )}
         </div>
 
-        {/* Right sidebar - section editor */}
-        {selectedSection && (
-          <div className="w-80 border-l border-border bg-surface overflow-y-auto shrink-0">
-            <div className="p-4 border-b border-border">
-              <h3 className="font-medium text-text-primary">
+        {selectedSection ? (
+          <aside className="flex w-[320px] shrink-0 flex-col overflow-y-auto border-l border-[#EDE8E3] bg-white p-7">
+            <div className="mb-6 flex flex-col gap-1">
+              <p className="text-xs font-bold uppercase tracking-wide text-[#9C9293]">
+                Ρύθμιση ενότητας
+              </p>
+              <h2 className="font-display text-2xl text-[#1C1516]">
                 {SECTION_LABELS[selectedSection.sectionType] ??
                   selectedSection.sectionType}
-              </h3>
-              <p className="text-xs text-text-muted mt-1">
-                Επεξεργασία ρυθμίσεων ενότητας
-              </p>
+              </h2>
             </div>
             <SectionEditor
+              eventId={eventId}
               section={selectedSection}
               onSave={(json) => updateSectionConfig(selectedSection.id, json)}
             />
-          </div>
-        )}
+          </aside>
+        ) : null}
       </div>
     </div>
   );
@@ -535,7 +635,9 @@ function SectionPreview({
     <div
       onClick={onClick}
       className={`cursor-pointer transition-all ${
-        isSelected ? "ring-2 ring-accent ring-inset" : "hover:ring-1 hover:ring-accent/30 hover:ring-inset"
+        isSelected
+          ? "ring-2 ring-[#C4993D] ring-inset"
+          : "hover:ring-1 hover:ring-[#C4993D]/30 hover:ring-inset"
       }`}
     >
       {section.sectionType === "hero" && (
@@ -748,9 +850,11 @@ function SectionPreview({
 }
 
 function SectionEditor({
+  eventId,
   section,
   onSave,
 }: {
+  eventId: string;
   section: SectionData;
   onSave: (json: string) => void;
 }) {
@@ -777,32 +881,44 @@ function SectionEditor({
   const save = () => onSave(JSON.stringify(fields));
 
   const inputClass =
-    "w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text-primary outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors";
+    "w-full rounded-md border border-[#EDE8E3] bg-white px-3 py-2 text-[13px] text-[#1C1516] outline-none transition-colors focus:border-[#C4993D] focus:ring-1 focus:ring-[#C4993D]";
+  const labelClass = "mb-1.5 block text-xs font-semibold text-[#6E6263]";
 
   return (
-    <div className="p-4 space-y-4">
-      {/* Common heading field */}
-      {"heading" in config && (
-        <div>
-          <label className="block text-xs font-medium text-text-secondary mb-1">
-            Επικεφαλίδα
-          </label>
-          <input
-            type="text"
-            value={(fields.heading as string) ?? ""}
-            onChange={(e) => update("heading", e.target.value)}
-            className={inputClass}
-          />
-        </div>
+    <div className="flex flex-col gap-4">
+      {section.sectionType !== "hero" && section.sectionType !== "footer" && (
+        <>
+          <div>
+            <label className={labelClass}>
+              Μικρή ετικέτα
+            </label>
+            <input
+              type="text"
+              value={(fields.label as string) ?? ""}
+              onChange={(e) => update("label", e.target.value)}
+              className={inputClass}
+              placeholder="π.χ. Τοποθεσίες"
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Επικεφαλίδα
+            </label>
+            <input
+              type="text"
+              value={(fields.heading as string) ?? ""}
+              onChange={(e) => update("heading", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+        </>
       )}
 
       {/* Hero section */}
       {section.sectionType === "hero" && (
         <>
           <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">
-              Τίτλος
-            </label>
+            <label className={labelClass}>Τίτλος Πρόσκλησης</label>
             <input
               type="text"
               value={(fields.title as string) ?? ""}
@@ -811,9 +927,7 @@ function SectionEditor({
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">
-              Υπότιτλος
-            </label>
+            <label className={labelClass}>Υπότιτλος / Κάλεσμα</label>
             <input
               type="text"
               value={(fields.subtitle as string) ?? ""}
@@ -822,9 +936,14 @@ function SectionEditor({
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">
-              Αδιαφάνεια overlay ({((fields.overlayOpacity as number) ?? 0.3) * 100}%)
-            </label>
+            <div className="mb-2 flex items-center justify-between">
+              <label className="text-xs font-semibold text-[#6E6263]">
+                Διαφάνεια overlay
+              </label>
+              <span className="text-xs font-semibold text-[#1C1516]">
+                {Math.round(((fields.overlayOpacity as number) ?? 0.3) * 100)}%
+              </span>
+            </div>
             <input
               type="range"
               min="0"
@@ -834,14 +953,143 @@ function SectionEditor({
               onChange={(e) =>
                 update("overlayOpacity", parseFloat(e.target.value))
               }
-              className="w-full accent-accent"
+              className="w-full accent-[#C4993D]"
             />
           </div>
         </>
       )}
 
-      {/* Welcome text */}
-      {section.sectionType === "welcome_text" && (
+      {/* Event details */}
+      {section.sectionType === "event_details" && (
+        <>
+          <div>
+            <label className={labelClass}>
+              Ενδυμασία
+            </label>
+            <input
+              type="text"
+              value={(fields.dressCode as string) ?? ""}
+              onChange={(e) => update("dressCode", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Ετικέτα ημερομηνίας
+            </label>
+            <input
+              type="text"
+              value={(fields.dateLabel as string) ?? ""}
+              onChange={(e) => update("dateLabel", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Ετικέτα ώρας
+            </label>
+            <input
+              type="text"
+              value={(fields.timeLabel as string) ?? ""}
+              onChange={(e) => update("timeLabel", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Ετικέτα ενδυμασίας
+            </label>
+            <input
+              type="text"
+              value={(fields.attireLabel as string) ?? ""}
+              onChange={(e) => update("attireLabel", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Υπότιτλος ενδυμασίας
+            </label>
+            <input
+              type="text"
+              value={(fields.attireSub as string) ?? ""}
+              onChange={(e) => update("attireSub", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Σύνδεσμος χάρτη
+            </label>
+            <input
+              type="text"
+              value={(fields.mapsLabel as string) ?? ""}
+              onChange={(e) => update("mapsLabel", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
+            <input
+              type="checkbox"
+              checked={(fields.showPrintedCard as boolean) ?? false}
+              onChange={(e) => update("showPrintedCard", e.target.checked)}
+              className="rounded border-border accent-accent"
+            />
+            Έντυπη πρόσκληση
+          </label>
+          {(fields.showPrintedCard as boolean) && (
+            <>
+              <div>
+                <label className={labelClass}>
+                  Ετικέτα έντυπης
+                </label>
+                <input
+                  type="text"
+                  value={(fields.paperLabel as string) ?? ""}
+                  onChange={(e) => update("paperLabel", e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>
+                  Τίτλος έντυπης
+                </label>
+                <input
+                  type="text"
+                  value={(fields.paperHeading as string) ?? ""}
+                  onChange={(e) => update("paperHeading", e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>
+                  Τύπος εκδήλωσης στην κάρτα
+                </label>
+                <input
+                  type="text"
+                  value={(fields.paperEventType as string) ?? ""}
+                  onChange={(e) => update("paperEventType", e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>
+                  Γραμμή πρόσκλησης
+                </label>
+                <input
+                  type="text"
+                  value={(fields.paperInviteLine as string) ?? ""}
+                  onChange={(e) => update("paperInviteLine", e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {(section.sectionType === "welcome_text" ||
+        section.sectionType === "gift_list") && (
         <div>
           <label className="block text-xs font-medium text-text-secondary mb-1">
             Κείμενο
@@ -859,7 +1107,7 @@ function SectionEditor({
       {section.sectionType === "rsvp" && (
         <>
           <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">
+            <label className={labelClass}>
               Περιγραφή
             </label>
             <textarea
@@ -870,13 +1118,90 @@ function SectionEditor({
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">
+            <label className={labelClass}>
               Προθεσμία
             </label>
             <input
               type="date"
               value={(fields.deadline as string) ?? ""}
               onChange={(e) => update("deadline", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Ναι
+            </label>
+            <input
+              type="text"
+              value={(fields.attendingYes as string) ?? ""}
+              onChange={(e) => update("attendingYes", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Όχι
+            </label>
+            <input
+              type="text"
+              value={(fields.attendingNo as string) ?? ""}
+              onChange={(e) => update("attendingNo", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Κουμπί αποστολής
+            </label>
+            <input
+              type="text"
+              value={(fields.submitLabel as string) ?? ""}
+              onChange={(e) => update("submitLabel", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Ετικέτα ονόματος
+            </label>
+            <input
+              type="text"
+              value={(fields.nameLabel as string) ?? ""}
+              onChange={(e) => update("nameLabel", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Ετικέτα παρουσίας
+            </label>
+            <input
+              type="text"
+              value={(fields.attendingLabel as string) ?? ""}
+              onChange={(e) => update("attendingLabel", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Μήνυμα επιτυχίας
+            </label>
+            <input
+              type="text"
+              value={(fields.successTitle as string) ?? ""}
+              onChange={(e) => update("successTitle", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Κείμενο επιτυχίας
+            </label>
+            <input
+              type="text"
+              value={(fields.successText as string) ?? ""}
+              onChange={(e) => update("successText", e.target.value)}
               className={inputClass}
             />
           </div>
@@ -918,12 +1243,98 @@ function SectionEditor({
         </div>
       )}
 
+      {section.sectionType === "video" && (
+        <>
+          <div>
+            <label className={labelClass}>Τίτλος</label>
+            <input
+              type="text"
+              value={(fields.title as string) ?? ""}
+              onChange={(e) => update("title", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>YouTube ID</label>
+            <input
+              type="text"
+              value={(fields.youtubeId as string) ?? ""}
+              onChange={(e) => update("youtubeId", e.target.value)}
+              className={inputClass}
+              placeholder="π.χ. dQw4w9WgXcQ"
+            />
+          </div>
+        </>
+      )}
+
+      {(section.sectionType === "quiz" ||
+        section.sectionType === "wishes" ||
+        section.sectionType === "vendors" ||
+        section.sectionType === "participants") && (
+        <>
+          <div>
+            <label className={labelClass}>Υπότιτλος</label>
+            <input
+              type="text"
+              value={(fields.subtitle as string) ?? ""}
+              onChange={(e) => update("subtitle", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Τίτλος</label>
+            <input
+              type="text"
+              value={(fields.title as string) ?? (fields.heading as string) ?? ""}
+              onChange={(e) => update("title", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+        </>
+      )}
+
+      {section.sectionType === "participants" && (
+        <ParticipantsFields eventId={eventId} />
+      )}
+
+      {section.sectionType === "vendors" && (
+        <VendorsEditor
+          vendors={parseVendors(fields)}
+          onChange={(vendors: VendorConfig[]) => update("vendors", vendors)}
+        />
+      )}
+
+      {section.sectionType === "quiz" && (
+        <QuizQuestionsEditor
+          questions={
+            Array.isArray(fields.questions) && fields.questions.length > 0
+              ? (fields.questions as QuizQuestionConfig[])
+              : parseQuizQuestions(fields)
+          }
+          onChange={(questions: QuizQuestionConfig[]) => update("questions", questions)}
+        />
+      )}
+
+      {section.sectionType === "wishes" && <WishesFields eventId={eventId} />}
+
       {/* Gallery */}
       {section.sectionType === "gallery" && (
-        <div>
-          <label className="block text-xs font-medium text-text-secondary mb-1">
-            Στήλες
-          </label>
+        <>
+          <div>
+            <label className={labelClass}>
+              Υπόδειξη
+            </label>
+            <input
+              type="text"
+              value={(fields.hint as string) ?? ""}
+              onChange={(e) => update("hint", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Στήλες
+            </label>
           <select
             value={(fields.columns as number) ?? 3}
             onChange={(e) => update("columns", parseInt(e.target.value))}
@@ -934,27 +1345,66 @@ function SectionEditor({
             <option value={4}>4</option>
           </select>
         </div>
+        </>
       )}
 
       {/* Venue */}
       {section.sectionType === "venue" && (
-        <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
-          <input
-            type="checkbox"
-            checked={(fields.showMap as boolean) ?? true}
-            onChange={(e) => update("showMap", e.target.checked)}
-            className="rounded border-border accent-accent"
-          />
-          Εμφάνιση χάρτη
-        </label>
+        <>
+          <div>
+            <label className={labelClass}>
+              Σύνδεσμος χάρτη
+            </label>
+            <input
+              type="text"
+              value={(fields.mapsLabel as string) ?? ""}
+              onChange={(e) => update("mapsLabel", e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
+            <input
+              type="checkbox"
+              checked={(fields.showMap as boolean) ?? true}
+              onChange={(e) => update("showMap", e.target.checked)}
+              className="rounded border-border accent-accent"
+            />
+            Εμφάνιση χάρτη
+          </label>
+        </>
       )}
 
       <button
+        type="button"
         onClick={save}
-        className="w-full mt-4 px-4 py-2 text-sm font-medium text-white bg-accent rounded-lg hover:bg-accent-hover transition-colors cursor-pointer"
+        className="mt-3 w-full rounded-lg bg-[#C4993D] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#B38935]"
       >
         Αποθήκευση
       </button>
     </div>
   );
+}
+
+function ParticipantsFields({ eventId }: { eventId: string }) {
+  const [persons, setPersons] = useState<InvitationPerson[]>([]);
+
+  useEffect(() => {
+    api<InvitationPerson[]>(`/api/v1/events/${eventId}/persons`)
+      .then(setPersons)
+      .catch(() => setPersons([]));
+  }, [eventId]);
+
+  return <PersonsEditor eventId={eventId} persons={persons} onChange={setPersons} />;
+}
+
+function WishesFields({ eventId }: { eventId: string }) {
+  const [wishes, setWishes] = useState<GuestWishItem[]>([]);
+
+  useEffect(() => {
+    api<GuestWishItem[]>(`/api/v1/events/${eventId}/wishes`)
+      .then(setWishes)
+      .catch(() => setWishes([]));
+  }, [eventId]);
+
+  return <WishesInbox wishes={wishes} />;
 }

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { LandingLogo } from "@/components/landing/landing-logo";
+import { AuthEyeIcon } from "@/components/auth/auth-eye-icon";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, getApiErrorMessage } from "@/lib/api";
 
@@ -12,6 +14,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -34,32 +37,26 @@ export default function LoginPage() {
     }
   };
 
+  const inputClass =
+    "h-12 w-full rounded-lg border border-[#EADFCB] bg-[#FBF9F4] px-4 text-sm text-[#1F0F12] placeholder:text-[#6E5B60] outline-none focus:border-[#4A1221] focus:ring-1 focus:ring-[#4A1221]";
+
   return (
-    <>
-      <div className="mb-8 text-center">
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-text-primary">
-          Καλωσήρθατε
-        </h1>
-        <p className="mt-2 text-text-secondary">
-          Συνδεθείτε στον λογαριασμό σας
-        </p>
+    <div className="w-full max-w-[460px] rounded-2xl border border-[#EADFCB] bg-white p-10 shadow-[0_8px_16px_rgba(31,15,18,0.05)]">
+      <div className="mb-8 flex flex-col items-center gap-4 text-center">
+        <LandingLogo href="/" size="lg" />
+        <div className="space-y-1.5">
+          <h1 className="font-display text-4xl text-[#4A1221]">Καλωσήρθατε</h1>
+          <p className="text-sm text-[#6E5B60]">Συνδεθείτε στον λογαριασμό σας</p>
+        </div>
       </div>
 
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-5 rounded-2xl border border-border bg-surface p-8 shadow-sm"
-      >
-        {error && (
-          <div className="rounded-lg bg-destructive-light px-4 py-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {error ? (
+          <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+        ) : null}
 
-        <div>
-          <label
-            htmlFor="email"
-            className="mb-1.5 block text-sm font-medium text-text-primary"
-          >
+        <div className="space-y-2">
+          <label htmlFor="email" className="block text-sm font-medium text-[#1F0F12]">
             Email
           </label>
           <input
@@ -69,44 +66,48 @@ export default function LoginPage() {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
+            className={inputClass}
             placeholder="you@example.com"
           />
         </div>
 
-        <div>
-          <label
-            htmlFor="password"
-            className="mb-1.5 block text-sm font-medium text-text-primary"
-          >
+        <div className="space-y-2">
+          <label htmlFor="password" className="block text-sm font-medium text-[#1F0F12]">
             Κωδικός
           </label>
-          <input
-            id="password"
-            type="password"
-            required
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
-            placeholder="••••••••"
-          />
+          <div className="relative">
+            <input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              required
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={`${inputClass} pr-12`}
+              placeholder="••••••••"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6E5B60] hover:text-[#4A1221]"
+              aria-label={showPassword ? "Απόκρυψη κωδικού" : "Εμφάνιση κωδικού"}
+            >
+              <AuthEyeIcon open={showPassword} />
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center justify-between text-sm">
-          <label className="flex items-center gap-2 text-text-secondary">
+        <div className="flex items-center justify-between text-[13px]">
+          <label className="flex cursor-pointer items-center gap-2 text-[#1F0F12]">
             <input
               type="checkbox"
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
-              className="rounded border-border accent-accent"
+              className="size-[18px] rounded border-[#EADFCB] accent-[#4A1221]"
             />
             Να με θυμάσαι
           </label>
-          <Link
-            href="/forgot-password"
-            className="text-accent hover:text-accent-hover transition-colors"
-          >
+          <Link href="/forgot-password" className="font-medium text-[#4A1221] hover:underline">
             Ξεχάσατε τον κωδικό;
           </Link>
         </div>
@@ -114,21 +115,18 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50 transition-colors cursor-pointer"
+          className="h-12 w-full rounded-lg bg-[#4A1221] text-sm font-semibold text-white transition-colors hover:bg-[#3A0E1A] disabled:opacity-50"
         >
           {submitting ? "Σύνδεση..." : "Σύνδεση"}
         </button>
 
-        <p className="text-center text-sm text-text-secondary">
+        <p className="text-center text-[13px] text-[#6E5B60]">
           Δεν έχετε λογαριασμό;{" "}
-          <Link
-            href="/register"
-            className="font-medium text-accent hover:text-accent-hover transition-colors"
-          >
+          <Link href="/register" className="font-semibold text-[#4A1221] hover:underline">
             Εγγραφή
           </Link>
         </p>
       </form>
-    </>
+    </div>
   );
 }

@@ -1,0 +1,201 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  NODE_VERSION: '22'
+  AZURE_RESOURCE_GROUP: 'rg-yido-${{ github.event.inputs.environment || ''staging'' }}'
+  AZURE_LOCATION: 'westeurope'
+
+jobs:
+  build-api:
+    name: Build API Image
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Azure Container Registry
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.ACR_LOGIN_SERVER }}/yido-api
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: src/InvitationPlatform.Api/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-web:
+    name: Build Web Image
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Azure Container Registry
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.ACR_LOGIN_SERVER }}/yido-web
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Web image
+        uses: docker/build-push-action@v5
+        with:
+          context: src/InvitationPlatform.Web
+          file: src/InvitationPlatform.Web/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
+            NEXT_PUBLIC_TURNSTILE_SITE_KEY=${{ secrets.NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-infra:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    needs: [build-api, build-web]
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+    outputs:
+      api-fqdn: ${{ steps.deploy.outputs.apiFqdn }}
+      web-fqdn: ${{ steps.deploy.outputs.webFqdn }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Create Resource Group
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            az group create \
+              --name ${{ env.AZURE_RESOURCE_GROUP }} \
+              --location ${{ env.AZURE_LOCATION }} \
+              --tags environment=${{ github.event.inputs.environment || 'staging' }} project=yido
+
+      - name: Deploy Bicep
+        id: deploy
+        uses: azure/arm-deploy@v1
+        with:
+          resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
+          template: ./infra/main.bicep
+          parameters: >-
+            environmentName=${{ github.event.inputs.environment || 'staging' }}
+            location=${{ env.AZURE_LOCATION }}
+            sqlAdminUsername=${{ secrets.SQL_ADMIN_USERNAME }}
+            sqlAdminPassword=${{ secrets.SQL_ADMIN_PASSWORD }}
+            stripeSecretKey=${{ secrets.STRIPE_SECRET_KEY }}
+            sendGridApiKey=${{ secrets.SENDGRID_API_KEY }}
+            turnstileSecretKey=${{ secrets.TURNSTILE_SECRET_KEY }}
+            apiImageTag=${{ github.sha }}
+            webImageTag=${{ github.sha }}
+          failOnStdErr: false
+
+  deploy-apps:
+    name: Update Container Apps
+    runs-on: ubuntu-latest
+    needs: [deploy-infra]
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+    steps:
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Update API Container App
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            az containerapp update \
+              --name ca-api-yido-${{ github.event.inputs.environment || 'staging' }} \
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --image ${{ secrets.ACR_LOGIN_SERVER }}/yido-api:${{ github.sha }}
+
+      - name: Update Web Container App
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            az containerapp update \
+              --name ca-web-yido-${{ github.event.inputs.environment || 'staging' }} \
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --image ${{ secrets.ACR_LOGIN_SERVER }}/yido-web:${{ github.sha }}
+
+      - name: Output URLs
+        run: |
+          echo "## Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**API URL:** https://${{ needs.deploy-infra.outputs.api-fqdn }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Web URL:** https://${{ needs.deploy-infra.outputs.web-fqdn }}" >> $GITHUB_STEP_SUMMARY
+
+  run-migrations:
+    name: Run Database Migrations
+    runs-on: ubuntu-latest
+    needs: [deploy-infra]
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install EF Core Tools
+        run: dotnet tool install --global dotnet-ef
+
+      - name: Run Migrations
+        run: |
+          dotnet ef database update \
+            --project src/InvitationPlatform.Infrastructure \
+            --startup-project src/InvitationPlatform.Api \
+            --connection "${{ secrets.SQL_CONNECTION_STRING }}"

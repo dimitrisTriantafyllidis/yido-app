@@ -19,11 +19,41 @@ builder.Services.AddOpenApi();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddAntiforgery();
 
-// File storage (local filesystem for development)
-var uploadsPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "uploads");
-Directory.CreateDirectory(uploadsPath);
-builder.Services.AddSingleton<IFileStorageService>(
-    new LocalFileStorageService(uploadsPath, builder.Configuration.GetValue<string>("Frontend:ApiUrl") ?? "http://localhost:5000"));
+// Health checks
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<ApplicationDbContext>(name: "db", tags: ["db", "ready"]);
+
+// File storage: Azure Blob in Staging/Production, local disk in Development
+var storageProvider = builder.Configuration["Storage:Provider"]?.ToLowerInvariant();
+var blobConnection =
+    builder.Configuration["Storage:Azure:ConnectionString"]
+    ?? builder.Configuration["Storage:AzureBlob:ConnectionString"];
+var useAzureBlob =
+    !string.IsNullOrWhiteSpace(blobConnection)
+    && storageProvider is "azure" or "azureblob";
+
+if (useAzureBlob)
+{
+    builder.Services.AddSingleton<IFileStorageService>(
+        new AzureBlobStorageService(
+            blobConnection!,
+            builder.Configuration["Storage:Azure:ContainerName"]
+                ?? builder.Configuration["Storage:AzureBlob:ContainerName"]
+                ?? "uploads",
+            builder.Configuration["Storage:Azure:CdnBaseUrl"]
+                ?? builder.Configuration["Storage:AzureBlob:CdnBaseUrl"],
+            builder.Configuration.GetValue("Storage:Azure:UseSasUrls", false)
+                || builder.Configuration.GetValue("Storage:AzureBlob:UseSasUrls", false),
+            builder.Configuration.GetValue<TimeSpan?>("Storage:Azure:SasExpiry")
+        ));
+}
+else
+{
+    var uploadsPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "uploads");
+    Directory.CreateDirectory(uploadsPath);
+    builder.Services.AddSingleton<IFileStorageService>(
+        new LocalFileStorageService(uploadsPath, builder.Configuration.GetValue<string>("Frontend:ApiUrl") ?? "http://localhost:5000"));
+}
 
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
 {
@@ -93,6 +123,15 @@ builder.Services.AddRateLimiter(options =>
                 PermitLimit = 5,
                 Window = TimeSpan.FromMinutes(1)
             }));
+
+    options.AddPolicy("public-wishes", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1)
+            }));
 });
 
 builder.Services.AddCors(options =>
@@ -130,6 +169,16 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<TenantResolutionMiddleware>();
 app.MapControllers();
+
+// Health check endpoints
+app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = _ => false
+});
+app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
 
 // Hangfire dashboard (admin only, development)
 if (app.Environment.IsDevelopment())

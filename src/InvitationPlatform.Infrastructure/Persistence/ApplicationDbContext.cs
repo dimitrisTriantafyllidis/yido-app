@@ -1,3 +1,5 @@
+using InvitationPlatform.Application.Common.Interfaces;
+using InvitationPlatform.Domain.Common;
 using InvitationPlatform.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -26,7 +28,23 @@ public class ApplicationRole : IdentityRole<Guid>
 
 public class ApplicationDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>
 {
+    private readonly ITenantContext? _tenantContext;
+
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
+
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options, ITenantContext tenantContext)
+        : base(options)
+    {
+        _tenantContext = tenantContext;
+    }
+
+    /// <summary>
+    /// Current tenant ID used for query filters. Returns Guid.Empty for system admins 
+    /// (which will filter nothing since no entity has TenantId = Guid.Empty).
+    /// This is evaluated at query time, not model building time.
+    /// </summary>
+    private Guid CurrentTenantId => _tenantContext?.TenantId ?? Guid.Empty;
+    private bool IsSystemAdmin => _tenantContext?.IsSystemAdmin ?? false;
 
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Event> Events => Set<Event>();
@@ -40,6 +58,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<InvitationSection> InvitationSections => Set<InvitationSection>();
     public DbSet<GuestGroup> GuestGroups => Set<GuestGroup>();
     public DbSet<Guest> Guests => Set<Guest>();
+    public DbSet<EventTable> EventTables => Set<EventTable>();
     public DbSet<Rsvp> Rsvps => Set<Rsvp>();
     public DbSet<Package> Packages => Set<Package>();
     public DbSet<Feature> Features => Set<Feature>();
@@ -52,6 +71,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<RsvpQuestion> RsvpQuestions => Set<RsvpQuestion>();
     public DbSet<RsvpAnswer> RsvpAnswers => Set<RsvpAnswer>();
+    public DbSet<GuestWish> GuestWishes => Set<GuestWish>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -67,6 +87,41 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
         modelBuilder.Entity<IdentityUserLogin<Guid>>(b => b.ToTable("UserLogins"));
         modelBuilder.Entity<IdentityUserToken<Guid>>(b => b.ToTable("UserTokens"));
         modelBuilder.Entity<IdentityRoleClaim<Guid>>(b => b.ToTable("RoleClaims"));
+
+        // Global tenant query filters for all ITenantEntity types
+        // System admins bypass the filter; regular users only see their tenant's data
+        ApplyTenantFilter<EventPerson>(modelBuilder);
+        ApplyTenantFilter<EventTable>(modelBuilder);
+        ApplyTenantFilter<GuestGroup>(modelBuilder);
+        ApplyTenantFilter<GuestWish>(modelBuilder);
+        ApplyTenantFilter<InvitationSection>(modelBuilder);
+        ApplyTenantFilter<InvitationVersion>(modelBuilder);
+        ApplyTenantFilter<MediaFile>(modelBuilder);
+        ApplyTenantFilter<Order>(modelBuilder);
+        ApplyTenantFilter<Rsvp>(modelBuilder);
+        ApplyTenantFilter<RsvpAnswer>(modelBuilder);
+        ApplyTenantFilter<RsvpQuestion>(modelBuilder);
+        ApplyTenantFilter<Subscription>(modelBuilder);
+        ApplyTenantFilter<TenantFeatureOverride>(modelBuilder);
+        ApplyTenantFilter<Venue>(modelBuilder);
+
+        // Entities with soft-delete need combined filters
+        ApplyTenantFilterWithSoftDelete<Event>(modelBuilder);
+        ApplyTenantFilterWithSoftDelete<Guest>(modelBuilder);
+    }
+
+    private void ApplyTenantFilter<TEntity>(ModelBuilder modelBuilder)
+        where TEntity : class, ITenantEntity
+    {
+        modelBuilder.Entity<TEntity>().HasQueryFilter(
+            e => IsSystemAdmin || e.TenantId == CurrentTenantId);
+    }
+
+    private void ApplyTenantFilterWithSoftDelete<TEntity>(ModelBuilder modelBuilder)
+        where TEntity : class, ITenantEntity, ISoftDeletable
+    {
+        modelBuilder.Entity<TEntity>().HasQueryFilter(
+            e => !e.IsDeleted && (IsSystemAdmin || e.TenantId == CurrentTenantId));
     }
 
     public override int SaveChanges()

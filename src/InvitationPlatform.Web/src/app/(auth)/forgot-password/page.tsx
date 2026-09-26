@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { AuthCenteredShell } from "@/components/auth/auth-centered-shell";
 import { api, ApiError } from "@/lib/api";
 
 export default function ForgotPasswordPage() {
@@ -34,6 +35,7 @@ export default function ForgotPasswordPage() {
 
   if (sent) {
     return (
+      <AuthCenteredShell>
       <div className="text-center">
         <h1 className="font-display text-3xl font-semibold tracking-tight text-text-primary">
           Ελέγξτε το email σας
@@ -49,10 +51,12 @@ export default function ForgotPasswordPage() {
           Επιστροφή στη σύνδεση
         </Link>
       </div>
+      </AuthCenteredShell>
     );
   }
 
   return (
+    <AuthCenteredShell>
     <>
       <div className="mb-8 text-center">
         <h1 className="font-display text-3xl font-semibold tracking-tight text-text-primary">
@@ -110,5 +114,6 @@ export default function ForgotPasswordPage() {
         </p>
       </form>
     </>
+    </AuthCenteredShell>
   );
 }

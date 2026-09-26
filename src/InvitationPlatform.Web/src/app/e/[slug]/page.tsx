@@ -2,6 +2,16 @@
 
 import { useCallback, useEffect, useState, Suspense } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import {
+  ClassicLabel,
+  ClassicOrnament,
+  OliveBranch,
+  SectionIntro,
+  coupleInitials,
+  cfg,
+} from "./classic-ornaments";
+import { WEDDING_TEMPLATE_COMPONENTS } from "@/components/invitations/templates";
+import { resolveWeddingStyle, toInvitationViewModel } from "@/components/invitations/to-view-model";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
 
@@ -79,7 +89,7 @@ interface PublicInvitation {
   invitation: {
     id: string;
     theme: ThemeData | null;
-    template?: { id: string; name: string; eventType: string };
+    template?: { id: string; name: string; eventType: string; category?: string | null };
     sections: SectionData[];
   };
   media?: MediaItem[];
@@ -250,19 +260,34 @@ function PublicInvitationInner() {
 
   const { event, invitation } = data;
   const media = data.media ?? [];
+  const weddingStyle = resolveWeddingStyle(invitation.template?.category);
+  if (weddingStyle) {
+    const viewModel = toInvitationViewModel(data, weddingStyle);
+    const Template = WEDDING_TEMPLATE_COMPONENTS[weddingStyle];
+    return <Template data={viewModel} />;
+  }
+
   const images = media.filter((m) => m.mediaType === "Image");
   const videos = media.filter((m) => m.mediaType === "Video");
   const pdfs = media.filter((m) => m.mediaType === "Pdf");
   const audioTracks = media.filter((m) => m.mediaType === "Audio");
   const rsvpQuestions = data.rsvpQuestions ?? [];
   const theme = invitation.theme;
+  const category = (invitation.template?.category ?? "").toLowerCase();
   const themeName = theme?.name ?? "";
   const templateSkin =
-    themeName.includes("Ρομαντ") || themeName.toLowerCase().includes("romantic")
-      ? "romantic"
-      : themeName.includes("Μοντ") || themeName.toLowerCase().includes("modern")
-        ? "modern"
-        : "classic";
+    category === "birthday" || category === "party"
+      ? "birthday"
+      : category === "romantic" ||
+          themeName.includes("Ρομαντ") ||
+          themeName.toLowerCase().includes("romantic")
+        ? "romantic"
+        : category === "modern" ||
+            themeName.includes("Μοντ") ||
+            themeName.toLowerCase().includes("modern")
+          ? "modern"
+          : "classic";
+  const isClassic = templateSkin === "classic";
 
   const enabledSections = invitation.sections
     .filter((s) => s.isEnabled)
@@ -341,7 +366,9 @@ function PublicInvitationInner() {
             return (
               <section
                 key={section.id}
-                className="relative flex flex-col items-center justify-center min-h-[85vh] px-6 text-center overflow-hidden"
+                className={`relative flex flex-col items-center justify-center px-6 text-center overflow-hidden ${
+                  isClassic ? "h-screen min-h-[680px]" : "min-h-[85vh]"
+                }`}
                 style={{
                   backgroundColor: primaryColor,
                   color: "white",
@@ -353,7 +380,7 @@ function PublicInvitationInner() {
                     <img
                       src={coverImage}
                       alt=""
-                      className="absolute inset-0 w-full h-full object-cover"
+                      className="absolute inset-0 w-full h-full object-cover object-center"
                     />
                     <div
                       className="absolute inset-0"
@@ -363,39 +390,67 @@ function PublicInvitationInner() {
                             ? "linear-gradient(180deg, rgba(139,69,87,0.55), rgba(40,20,30,0.75))"
                             : templateSkin === "modern"
                               ? "linear-gradient(135deg, rgba(20,20,20,0.7), rgba(20,20,20,0.45))"
-                              : "linear-gradient(180deg, rgba(46,90,76,0.55), rgba(20,40,35,0.8))",
+                              : templateSkin === "birthday"
+                                ? "linear-gradient(135deg, rgba(26,26,24,0.72), rgba(212,165,116,0.35))"
+                                : "linear-gradient(to bottom, rgba(46,90,76,0.25), rgba(26,26,24,0.45), rgba(26,26,24,0.88))",
                       }}
                     />
                   </>
                 )}
                 <div className="relative z-10 max-w-3xl">
-                  <p
-                    className={`tracking-[0.35em] uppercase mb-6 opacity-85 ${
-                      templateSkin === "modern" ? "text-xs" : "text-sm"
-                    }`}
-                  >
-                    {(config.subtitle as string) ||
-                      (templateSkin === "romantic"
-                        ? "Με αγάπη σας προσκαλούμε"
-                        : "Πρόσκληση")}
-                  </p>
+                  {cfg(config, "subtitle") && (
+                    <p
+                      className={`uppercase ${
+                        isClassic
+                          ? "text-[10px] tracking-[0.5em] text-white/55 mb-10"
+                          : templateSkin === "modern" || templateSkin === "birthday"
+                            ? "text-xs tracking-[0.35em] mb-6 opacity-85"
+                            : "text-sm tracking-[0.35em] mb-6 opacity-85"
+                      }`}
+                    >
+                      {cfg(config, "subtitle")}
+                    </p>
+                  )}
                   <h1
-                    className={`${
-                      templateSkin === "modern"
-                        ? "text-4xl md:text-6xl tracking-tight"
-                        : "text-5xl md:text-7xl tracking-tight"
-                    } font-semibold`}
-                    style={{ fontFamily: `${displayFont}, serif` }}
+                    className={
+                      isClassic
+                        ? "font-normal leading-[1.05] tracking-tight text-[clamp(3.5rem,12vw,9rem)]"
+                        : `${
+                            templateSkin === "modern" || templateSkin === "birthday"
+                              ? "text-4xl md:text-6xl tracking-tight"
+                              : "text-5xl md:text-7xl tracking-tight"
+                          } font-semibold`
+                    }
+                    style={{
+                      fontFamily:
+                        templateSkin === "birthday"
+                          ? `${bodyFont}, sans-serif`
+                          : `${displayFont}, serif`,
+                    }}
                   >
                     {(config.title as string) || event.title}
                   </h1>
                   {eventDate && (
-                    <div className="mt-8 flex items-center justify-center gap-3 opacity-80">
+                    <div
+                      className={`mt-8 flex items-center justify-center gap-3 ${
+                        isClassic ? "flex-col opacity-65" : "opacity-80"
+                      }`}
+                    >
                       <span
-                        className="h-px w-12"
-                        style={{ backgroundColor: "rgba(255,255,255,0.45)" }}
+                        className={isClassic ? "h-px w-20 bg-white/35 mb-0" : "h-px w-12"}
+                        style={
+                          isClassic
+                            ? undefined
+                            : { backgroundColor: "rgba(255,255,255,0.45)" }
+                        }
                       />
-                      <time className="text-sm tracking-wide">
+                      <time
+                        className={
+                          isClassic
+                            ? "text-[10px] uppercase tracking-[0.42em] text-white/65"
+                            : "text-sm tracking-wide"
+                        }
+                      >
                         {eventDate.toLocaleDateString("el-GR", {
                           weekday: "long",
                           day: "numeric",
@@ -403,13 +458,20 @@ function PublicInvitationInner() {
                           year: "numeric",
                         })}
                       </time>
-                      <span
-                        className="h-px w-12"
-                        style={{ backgroundColor: "rgba(255,255,255,0.45)" }}
-                      />
+                      {!isClassic && (
+                        <span
+                          className="h-px w-12"
+                          style={{ backgroundColor: "rgba(255,255,255,0.45)" }}
+                        />
+                      )}
                     </div>
                   )}
                 </div>
+                {isClassic && (
+                  <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
+                    <span className="block h-4 w-4 animate-bounce rotate-45 border-b border-r border-white/40" />
+                  </div>
+                )}
               </section>
             );
 
@@ -417,63 +479,255 @@ function PublicInvitationInner() {
             return (
               <section
                 key={section.id}
-                className="px-6 py-20 max-w-2xl mx-auto text-center"
+                className={`px-6 mx-auto text-center ${
+                  isClassic ? "max-w-[560px] py-28" : "max-w-2xl py-20"
+                }`}
               >
-                {config.heading && (
+                {isClassic && <ClassicOrnament color={primaryColor} />}
+                {cfg(config, "heading") && (
                   <h2
-                    className="text-2xl font-semibold mb-6"
+                    className={`font-semibold ${isClassic ? "mt-10 mb-4 text-2xl" : "mb-6 text-2xl"}`}
                     style={{
                       fontFamily: `${displayFont}, serif`,
                       color: primaryColor,
                     }}
                   >
-                    {config.heading as string}
+                    {cfg(config, "heading")}
                   </h2>
                 )}
-                <p className="text-lg leading-relaxed opacity-80">
-                  {(config.text as string) || ""}
-                </p>
+                {cfg(config, "text") && (
+                  <p
+                    className={
+                      isClassic
+                        ? "font-normal italic mt-10 mb-10 text-[1.25rem] leading-[1.85] text-current/70"
+                        : "text-lg leading-relaxed opacity-80"
+                    }
+                    style={
+                      isClassic ? { fontFamily: `${displayFont}, serif` } : undefined
+                    }
+                  >
+                    {cfg(config, "text")}
+                  </p>
+                )}
+                {isClassic && <ClassicOrnament color={primaryColor} />}
               </section>
             );
 
-          case "event_details":
+          case "event_details": {
+            const [leftInitial, rightInitial] = coupleInitials(
+              cfg(config, "title") || event.title
+            );
+            const dressCode = cfg(config, "dressCode");
+            const showPrintedCard = config.showPrintedCard === true;
+            const venues = event.venues ?? [];
+            const detailItems = eventDate
+              ? [
+                  {
+                    label: cfg(config, "dateLabel"),
+                    main: eventDate.toLocaleDateString("el-GR", {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    }),
+                    sub: eventDate.toLocaleDateString("el-GR", { weekday: "long" }),
+                  },
+                  {
+                    label: cfg(config, "timeLabel"),
+                    main: eventDate.toLocaleTimeString("el-GR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }),
+                    sub: venues[0]
+                      ? (VENUE_TYPE_LABELS[venues[0].venueType] ?? venues[0].venueType)
+                      : "",
+                  },
+                  ...(dressCode
+                    ? [
+                        {
+                          label: cfg(config, "attireLabel"),
+                          main: dressCode,
+                          sub: cfg(config, "attireSub"),
+                        },
+                      ]
+                    : []),
+                ].filter((item) => item.label || item.main)
+              : [];
             return (
-              <section
-                key={section.id}
-                className="px-6 py-16"
-                style={{ backgroundColor: surfaceColor }}
-              >
-                <div className="max-w-2xl mx-auto text-center">
-                  <h2
-                    className="text-2xl font-semibold mb-8"
-                    style={{
-                      fontFamily: `${displayFont}, serif`,
-                      color: primaryColor,
-                    }}
-                  >
-                    {(config.heading as string) || "Λεπτομέρειες"}
-                  </h2>
-                  {eventDate && (
-                    <div className="space-y-2">
-                      <p className="text-lg">
-                        {eventDate.toLocaleDateString("el-GR", {
-                          weekday: "long",
-                          day: "numeric",
-                          month: "long",
-                          year: "numeric",
-                        })}
-                      </p>
-                      <p className="opacity-70">
-                        {eventDate.toLocaleTimeString("el-GR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
+              <section key={section.id}>
+                {showPrintedCard && (
+                  <div className="overflow-hidden px-6 py-24" style={{ backgroundColor: "#E8E5DE" }}>
+                    <div className="mx-auto max-w-4xl">
+                      <SectionIntro
+                        heading={cfg(config, "paperHeading")}
+                        label={cfg(config, "paperLabel")}
+                        displayFont={displayFont}
+                        primaryColor={primaryColor}
+                        classic
+                      />
+                      <div className="relative mx-auto flex max-w-3xl overflow-hidden rounded-sm shadow-[6px_10px_48px_rgba(0,0,0,0.22)]">
+                        <div
+                          className="relative flex w-[42%] flex-col items-center justify-center px-6 py-10 text-white"
+                          style={{ backgroundColor: primaryColor }}
+                        >
+                          <OliveBranch className="absolute top-8 left-6 w-10 text-white/30" />
+                          {cfg(config, "paperEventType") && (
+                            <p className="mb-5 text-[8px] uppercase tracking-[0.55em] text-white/40">
+                              {cfg(config, "paperEventType")}
+                            </p>
+                          )}
+                          <p
+                            className="text-[2.6rem] leading-none tracking-tight"
+                            style={{ fontFamily: `${displayFont}, serif` }}
+                          >
+                            {leftInitial}
+                          </p>
+                          {rightInitial && (
+                            <>
+                              <p className="my-1 text-base tracking-widest text-white/50">&amp;</p>
+                              <p
+                                className="text-[2.6rem] leading-none tracking-tight"
+                                style={{ fontFamily: `${displayFont}, serif` }}
+                              >
+                                {rightInitial}
+                              </p>
+                            </>
+                          )}
+                          <div className="my-5 h-px w-8 bg-white/25" />
+                          {eventDate && (
+                            <p className="font-serif text-xs tracking-wide text-white/50">
+                              {eventDate.getFullYear()}
+                            </p>
+                          )}
+                          <OliveBranch className="absolute right-6 bottom-8 w-10 rotate-180 text-white/30" />
+                        </div>
+                        <div
+                          className="relative flex w-[58%] flex-col items-center justify-center px-6 py-10 text-center md:px-10"
+                          style={{ backgroundColor: bgColor }}
+                        >
+                          <div className="pointer-events-none absolute inset-[10px] border border-black/5" />
+                          {cfg(config, "paperInviteLine") && (
+                            <p
+                              className="mb-5 text-[8px] uppercase tracking-[0.5em]"
+                              style={{ color: primaryColor }}
+                            >
+                              {cfg(config, "paperInviteLine")}
+                            </p>
+                          )}
+                          <h3
+                            className="text-[1.4rem] leading-tight md:text-[1.8rem]"
+                            style={{ fontFamily: `${displayFont}, serif` }}
+                          >
+                            {cfg(config, "title") || event.title}
+                          </h3>
+                          {eventDate && (
+                            <p className="mt-6 italic opacity-50" style={{ fontFamily: `${displayFont}, serif` }}>
+                              {eventDate.toLocaleDateString("el-GR", {
+                                weekday: "long",
+                                day: "numeric",
+                                month: "long",
+                                year: "numeric",
+                              })}
+                            </p>
+                          )}
+                          <div className="mt-6 w-full max-w-[220px] space-y-3">
+                            {venues.slice(0, 2).map((v) => (
+                              <div key={v.id} className="border-t border-black/10 pt-3">
+                                <p
+                                  className="mb-0.5 text-[8px] uppercase tracking-[0.4em]"
+                                  style={{ color: primaryColor }}
+                                >
+                                  {VENUE_TYPE_LABELS[v.venueType] ?? v.venueType}
+                                </p>
+                                <p className="text-sm opacity-80" style={{ fontFamily: `${displayFont}, serif` }}>
+                                  {v.name}
+                                </p>
+                                {v.time && (
+                                  <p className="text-xs italic opacity-45">{v.time}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          {dressCode && (
+                            <p className="mt-6 text-[7px] uppercase tracking-[0.5em] opacity-25">
+                              {cfg(config, "attireSub") ? `${cfg(config, "attireSub")} · ` : ""}
+                              {dressCode}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  )}
+                  </div>
+                )}
+                <div
+                  className="px-6 py-16 md:py-20"
+                  style={{ backgroundColor: surfaceColor }}
+                >
+                  <div className="mx-auto max-w-4xl text-center">
+                    <SectionIntro
+                      heading={cfg(config, "heading")}
+                      label={cfg(config, "label")}
+                      displayFont={displayFont}
+                      primaryColor={primaryColor}
+                      classic={isClassic}
+                    />
+                    {eventDate && isClassic && detailItems.length > 0 ? (
+                      <div className="grid grid-cols-1 divide-y md:grid-cols-3 md:divide-x md:divide-y-0" style={{ borderColor: `${primaryColor}20` }}>
+                        {detailItems.map((item) => (
+                          <div
+                            key={item.label || item.main}
+                            className="flex flex-col items-center gap-3 py-10 text-center md:px-10 md:py-0"
+                          >
+                            <div
+                              className="flex h-8 w-8 items-center justify-center rounded-full border text-sm"
+                              style={{ borderColor: `${primaryColor}33`, color: primaryColor }}
+                            >
+                              ✦
+                            </div>
+                            {item.label && (
+                              <p className="text-[9px] uppercase tracking-[0.4em] opacity-50">
+                                {item.label}
+                              </p>
+                            )}
+                            <p
+                              className="text-2xl font-medium leading-tight"
+                              style={{ fontFamily: `${displayFont}, serif` }}
+                            >
+                              {item.main}
+                            </p>
+                            {item.sub && (
+                              <p
+                                className="text-base italic opacity-55"
+                                style={{ fontFamily: `${displayFont}, serif` }}
+                              >
+                                {item.sub}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : eventDate ? (
+                      <div className="space-y-2">
+                        <p className="text-lg">
+                          {eventDate.toLocaleDateString("el-GR", {
+                            weekday: "long",
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                          })}
+                        </p>
+                        <p className="opacity-70">
+                          {eventDate.toLocaleTimeString("el-GR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </section>
             );
+          }
 
           case "countdown":
             return (
@@ -491,78 +745,108 @@ function PublicInvitationInner() {
             return (
               <section
                 key={section.id}
-                className="px-6 py-16"
-                style={{ backgroundColor: surfaceColor }}
+                className={isClassic ? "px-6 py-24" : "px-6 py-16"}
+                style={{ backgroundColor: isClassic ? bgColor : surfaceColor }}
               >
-                <div className="max-w-2xl mx-auto">
-                  <h2
-                    className="text-2xl font-semibold text-center mb-12"
-                    style={{
-                      fontFamily: `${displayFont}, serif`,
-                      color: primaryColor,
-                    }}
+                <div className={`mx-auto ${isClassic ? "max-w-5xl" : "max-w-2xl"}`}>
+                  <SectionIntro
+                    heading={cfg(config, "heading")}
+                    label={cfg(config, "label")}
+                    displayFont={displayFont}
+                    primaryColor={primaryColor}
+                    classic={isClassic}
+                  />
+                  <div
+                    className={
+                      isClassic
+                        ? "grid gap-5 md:grid-cols-2"
+                        : "space-y-10"
+                    }
                   >
-                    {(config.heading as string) || "Τοποθεσίες"}
-                  </h2>
-                  <div className="space-y-10">
-                    {(event.venues ?? []).map((v, i) => (
-                      <div key={v.id}>
-                        {i > 0 && (
+                    {(event.venues ?? []).map((v, i) =>
+                      isClassic ? (
+                        <div
+                          key={v.id}
+                          className="overflow-hidden border bg-white"
+                          style={{
+                            borderColor: `${textColor}1A`,
+                            borderRadius: "2px",
+                          }}
+                        >
                           <div
-                            className="border-t mb-10"
-                            style={{
-                              borderColor: `${primaryColor}20`,
-                            }}
-                          />
-                        )}
-                        <div className="text-center">
-                          <p className="text-xs tracking-widest uppercase opacity-50 mb-2">
-                            {VENUE_TYPE_LABELS[v.venueType] ?? v.venueType}
-                          </p>
-                          <h3
-                            className="text-2xl font-semibold"
-                            style={{
-                              fontFamily: `${displayFont}, serif`,
-                            }}
+                            className="relative flex aspect-[4/3] items-end px-6 py-5"
+                            style={{ backgroundColor: primaryColor }}
                           >
-                            {v.name}
-                          </h3>
-                          <p className="mt-2 opacity-70">
-                            {v.address}
-                            {v.city ? `, ${v.city}` : ""}
-                          </p>
-                          {v.time && (
-                            <p className="mt-1 opacity-50 text-sm">
-                              {v.time}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
+                            <p className="relative text-[9px] uppercase tracking-[0.45em] text-white/60">
+                              {VENUE_TYPE_LABELS[v.venueType] ?? v.venueType}
+                              {v.time ? ` · ${v.time}` : ""}
                             </p>
-                          )}
-                          {v.googleMapsUrl && (
-                            <a
-                              href={v.googleMapsUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center mt-3 text-sm transition-colors"
-                              style={{ color: accentColor }}
+                          </div>
+                          <div className="p-7">
+                            <h3
+                              className="mb-4 text-[1.4rem] font-normal leading-snug"
+                              style={{ fontFamily: `${displayFont}, serif` }}
                             >
-                              Οδηγίες στο χάρτη
-                              <svg
-                                className="ml-1 w-4 h-4"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                strokeWidth={2}
+                              {v.name}
+                            </h3>
+                            <p className="text-sm leading-relaxed opacity-60">
+                              {v.address}
+                              {v.city ? `, ${v.city}` : ""}
+                            </p>
+                            {v.googleMapsUrl && cfg(config, "mapsLabel") && (
+                              <a
+                                href={v.googleMapsUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-3 inline-block text-sm"
+                                style={{ color: accentColor }}
                               >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                                />
-                              </svg>
-                            </a>
-                          )}
+                                {cfg(config, "mapsLabel")}
+                              </a>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ) : (
+                        <div key={v.id}>
+                          {i > 0 && (
+                            <div
+                              className="mb-10 border-t"
+                              style={{ borderColor: `${primaryColor}20` }}
+                            />
+                          )}
+                          <div className="text-center">
+                            <p className="mb-2 text-xs uppercase tracking-widest opacity-50">
+                              {VENUE_TYPE_LABELS[v.venueType] ?? v.venueType}
+                            </p>
+                            <h3
+                              className="text-2xl font-semibold"
+                              style={{ fontFamily: `${displayFont}, serif` }}
+                            >
+                              {v.name}
+                            </h3>
+                            <p className="mt-2 opacity-70">
+                              {v.address}
+                              {v.city ? `, ${v.city}` : ""}
+                            </p>
+                            {v.time && (
+                              <p className="mt-1 text-sm opacity-50">{v.time}</p>
+                            )}
+                            {v.googleMapsUrl && cfg(config, "mapsLabel") && (
+                              <a
+                                href={v.googleMapsUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-3 inline-flex items-center text-sm transition-colors"
+                                style={{ color: accentColor }}
+                              >
+                                {cfg(config, "mapsLabel")}
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    )}
                   </div>
                 </div>
               </section>
@@ -570,34 +854,51 @@ function PublicInvitationInner() {
 
           case "participants":
             return (
-              <section key={section.id} className="px-6 py-16">
-                <div className="max-w-4xl mx-auto text-center">
-                  <h2
-                    className="text-2xl font-semibold mb-10"
-                    style={{
-                      fontFamily: `${displayFont}, serif`,
-                      color: primaryColor,
-                    }}
+              <section
+                key={section.id}
+                className={isClassic ? "border-y px-6 py-24" : "px-6 py-16"}
+                style={
+                  isClassic
+                    ? { backgroundColor: surfaceColor, borderColor: `${textColor}1A` }
+                    : undefined
+                }
+              >
+                <div className="mx-auto max-w-4xl text-center">
+                  <SectionIntro
+                    heading={cfg(config, "heading")}
+                    label={cfg(config, "label")}
+                    displayFont={displayFont}
+                    primaryColor={primaryColor}
+                    classic={isClassic}
+                  />
+                  <div
+                    className={
+                      isClassic
+                        ? "grid grid-cols-2 gap-8 md:grid-cols-4 md:gap-12"
+                        : "flex flex-wrap justify-center gap-8 md:gap-12"
+                    }
                   >
-                    {(config.heading as string) || "Πρόσωπα"}
-                  </h2>
-                  <div className="flex flex-wrap justify-center gap-8 md:gap-12">
                     {(event.persons ?? []).map((p) => (
-                      <div key={p.id} className="text-center w-28">
+                      <div key={p.id} className="text-center">
                         <div
                           className={`mx-auto mb-3 overflow-hidden flex items-center justify-center ${
-                            templateSkin === "modern"
-                              ? "w-24 h-24 rounded-md"
-                              : "w-24 h-24 rounded-full"
+                            templateSkin === "modern" || templateSkin === "birthday"
+                              ? "h-24 w-24 rounded-md"
+                              : "h-24 w-24 rounded-full md:h-28 md:w-28"
                           }`}
-                          style={{ backgroundColor: `${primaryColor}18` }}
+                          style={{
+                            backgroundColor: `${primaryColor}18`,
+                            boxShadow: isClassic
+                              ? `0 0 0 1.5px ${primaryColor}33`
+                              : undefined,
+                          }}
                         >
                           {p.photoUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={p.photoUrl}
                               alt={p.displayName}
-                              className="w-full h-full object-cover"
+                              className="h-full w-full object-cover"
                             />
                           ) : (
                             <span
@@ -608,10 +909,29 @@ function PublicInvitationInner() {
                             </span>
                           )}
                         </div>
-                        <p className="font-medium text-sm">{p.displayName}</p>
-                        <p className="text-xs opacity-50 mt-0.5">
-                          {PERSON_ROLE_LABELS[p.role] ?? p.role}
-                        </p>
+                        {isClassic ? (
+                          <>
+                            <p
+                              className="mb-1.5 text-[9px] uppercase tracking-[0.42em]"
+                              style={{ color: primaryColor }}
+                            >
+                              {PERSON_ROLE_LABELS[p.role] ?? p.role}
+                            </p>
+                            <p
+                              className="text-[1.05rem] leading-snug"
+                              style={{ fontFamily: `${displayFont}, serif` }}
+                            >
+                              {p.displayName}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm font-medium">{p.displayName}</p>
+                            <p className="mt-0.5 text-xs opacity-50">
+                              {PERSON_ROLE_LABELS[p.role] ?? p.role}
+                            </p>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -631,43 +951,65 @@ function PublicInvitationInner() {
             return (
               <section
                 key={section.id}
-                className="px-6 py-20"
-                style={{ backgroundColor: surfaceColor }}
+                className={isClassic ? "classic-rsvp px-6 py-28" : "px-6 py-20"}
+                style={{ backgroundColor: isClassic ? primaryColor : surfaceColor }}
               >
-                <div className="max-w-lg mx-auto">
-                  <h2
-                    className="text-2xl font-semibold text-center mb-3"
-                    style={{
-                      fontFamily: `${displayFont}, serif`,
-                      color: primaryColor,
-                    }}
-                  >
-                    {rsvpConfig.heading || "Επιβεβαίωση Παρουσίας"}
-                  </h2>
-                  {rsvpConfig.description && (
-                    <p className="text-center opacity-60 text-sm mb-10">
-                      {rsvpConfig.description}
+                <div className="mx-auto max-w-lg">
+                  <SectionIntro
+                    heading={cfg(config, "heading")}
+                    label={cfg(config, "label")}
+                    displayFont={displayFont}
+                    primaryColor={primaryColor}
+                    classic={isClassic}
+                    light={isClassic}
+                  />
+                  {cfg(config, "description") && (
+                    <p
+                      className={`-mt-6 mb-10 text-center text-sm ${
+                        isClassic ? "text-white/50" : "opacity-60"
+                      }`}
+                    >
+                      {cfg(config, "description")}
                     </p>
                   )}
 
                   {rsvpSubmitted ? (
-                    <div className="text-center py-10">
-                      <div className="text-4xl mb-4">
-                        {rsvpForm.attending ? "🎉" : "😢"}
-                      </div>
-                      <h3
-                        className="text-xl font-semibold mb-2"
-                        style={{ color: primaryColor }}
-                      >
-                        {rsvpForm.attending
-                          ? "Ευχαριστούμε!"
-                          : "Λυπούμαστε!"}
-                      </h3>
-                      <p className="opacity-70">
-                        {rsvpForm.attending
-                          ? "Η απάντησή σας καταγράφηκε. Σας περιμένουμε!"
-                          : "Η απάντησή σας καταγράφηκε. Ελπίζουμε να τα πούμε σύντομα!"}
-                      </p>
+                    <div className="py-10 text-center">
+                      {isClassic ? (
+                        <div className="rounded-sm border border-white/15 p-10">
+                          <div className="mx-auto mb-5 flex h-11 w-11 items-center justify-center rounded-full border border-white/30 text-white">
+                            ✓
+                          </div>
+                          <p
+                            className="mb-2 text-2xl text-white"
+                            style={{ fontFamily: `${displayFont}, serif` }}
+                          >
+                            {cfg(config, "successTitle")}
+                          </p>
+                          <p className="text-sm text-white/50">
+                            {cfg(config, "successText")}
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="mb-4 text-4xl">
+                            {rsvpForm.attending ? "🎉" : "😢"}
+                          </div>
+                          <h3
+                            className="mb-2 text-xl font-semibold"
+                            style={{ color: primaryColor }}
+                          >
+                            {rsvpForm.attending
+                              ? cfg(config, "successTitle")
+                              : cfg(config, "declineTitle")}
+                          </h3>
+                          <p className="opacity-70">
+                            {rsvpForm.attending
+                              ? cfg(config, "successText")
+                              : cfg(config, "declineText")}
+                          </p>
+                        </>
+                      )}
                     </div>
                   ) : (
                     <form onSubmit={submitRsvp} className="space-y-6">
@@ -679,7 +1021,7 @@ function PublicInvitationInner() {
 
                       <div>
                         <label className="block text-sm font-medium mb-1.5">
-                          Ονοματεπώνυμο
+                          {cfg(config, "nameLabel")}
                         </label>
                         <input
                           type="text"
@@ -701,10 +1043,7 @@ function PublicInvitationInner() {
 
                       <div>
                         <label className="block text-sm font-medium mb-1.5">
-                          Email{" "}
-                          <span className="font-normal opacity-50">
-                            (προαιρετικό)
-                          </span>
+                          {cfg(config, "emailLabel")}
                         </label>
                         <input
                           type="email"
@@ -725,25 +1064,37 @@ function PublicInvitationInner() {
 
                       <fieldset>
                         <legend className="block text-sm font-medium mb-2">
-                          Θα παρευρεθείτε;
+                          {cfg(config, "attendingLabel")}
                         </legend>
                         <div className="flex gap-4">
                           {[
-                            { value: true, label: "Ναι, θα έρθω" },
-                            { value: false, label: "Δεν θα μπορέσω" },
+                            { value: true, label: cfg(config, "attendingYes") },
+                            { value: false, label: cfg(config, "attendingNo") },
                           ].map(({ value, label }) => (
                             <label
                               key={String(value)}
-                              className="flex-1 flex items-center justify-center px-4 py-2.5 border rounded-md cursor-pointer transition-colors"
+                              className="flex flex-1 cursor-pointer items-center justify-center rounded-md border px-4 py-2.5 transition-colors"
                               style={{
                                 borderColor:
                                   rsvpForm.attending === value
-                                    ? accentColor
-                                    : `${primaryColor}30`,
+                                    ? isClassic
+                                      ? "#fff"
+                                      : accentColor
+                                    : isClassic
+                                      ? "rgba(255,255,255,0.18)"
+                                      : `${primaryColor}30`,
                                 backgroundColor:
                                   rsvpForm.attending === value
-                                    ? `${accentColor}15`
+                                    ? isClassic
+                                      ? "#fff"
+                                      : `${accentColor}15`
                                     : "transparent",
+                                color:
+                                  rsvpForm.attending === value && isClassic
+                                    ? primaryColor
+                                    : isClassic
+                                      ? "rgba(255,255,255,0.65)"
+                                      : undefined,
                               }}
                             >
                               <input
@@ -770,7 +1121,7 @@ function PublicInvitationInner() {
                         <>
                           <div>
                             <label className="block text-sm font-medium mb-1.5">
-                              Αριθμός ατόμων
+                              {cfg(config, "adultsLabel")}
                             </label>
                             <select
                               value={rsvpForm.adultCount}
@@ -796,7 +1147,7 @@ function PublicInvitationInner() {
                           {rsvpConfig.showChildrenCount && (
                             <div>
                               <label className="block text-sm font-medium mb-1.5">
-                                Αριθμός παιδιών
+                                {cfg(config, "childrenLabel")}
                               </label>
                               <select
                                 value={rsvpForm.childrenCount}
@@ -823,10 +1174,7 @@ function PublicInvitationInner() {
                           {rsvpConfig.showPlusOne && (
                             <div>
                               <label className="block text-sm font-medium mb-1.5">
-                                Όνομα συνοδού{" "}
-                                <span className="font-normal opacity-50">
-                                  (προαιρετικό)
-                                </span>
+                                {cfg(config, "plusOneLabel")}
                               </label>
                               <input
                                 type="text"
@@ -848,7 +1196,7 @@ function PublicInvitationInner() {
                           {rsvpConfig.showMealPreference && (
                             <div>
                               <label className="block text-sm font-medium mb-1.5">
-                                Διατροφική προτίμηση
+                                {cfg(config, "mealLabel")}
                               </label>
                               <select
                                 value={rsvpForm.mealPreference}
@@ -922,10 +1270,7 @@ function PublicInvitationInner() {
 
                       <div>
                         <label className="block text-sm font-medium mb-1.5">
-                          Σημειώσεις{" "}
-                          <span className="font-normal opacity-50">
-                            (προαιρετικά)
-                          </span>
+                          {cfg(config, "notesLabel")}
                         </label>
                         <textarea
                           value={rsvpForm.notes}
@@ -953,8 +1298,8 @@ function PublicInvitationInner() {
                         style={{ backgroundColor: accentColor }}
                       >
                         {rsvpSubmitting
-                          ? "Αποστολή..."
-                          : "Αποστολή απάντησης"}
+                          ? cfg(config, "submittingLabel")
+                          : cfg(config, "submitLabel")}
                       </button>
                     </form>
                   )}
@@ -965,54 +1310,66 @@ function PublicInvitationInner() {
 
           case "gallery":
             return (
-              <section key={section.id} className="px-6 py-16">
-                <div className="max-w-4xl mx-auto">
-                  <h2
-                    className="text-2xl font-semibold text-center mb-8"
-                    style={{
-                      fontFamily: `${displayFont}, serif`,
-                      color: primaryColor,
-                    }}
-                  >
-                    {(config.heading as string) || "Φωτογραφίες"}
-                  </h2>
+              <section key={section.id} className={isClassic ? "px-6 py-24" : "px-6 py-16"}>
+                <div className={`mx-auto ${isClassic ? "max-w-6xl" : "max-w-4xl"}`}>
+                  <SectionIntro
+                    heading={cfg(config, "heading")}
+                    label={cfg(config, "label")}
+                    displayFont={displayFont}
+                    primaryColor={primaryColor}
+                    classic={isClassic}
+                  />
                   {images.length === 0 ? (
                     <p className="text-center text-sm opacity-50">
-                      Σύντομα φωτογραφίες από την εκδήλωση.
+                      {cfg(config, "emptyText")}
                     </p>
                   ) : (
                     <div
-                      className={`grid gap-3 ${
-                        templateSkin === "romantic"
-                          ? "grid-cols-2 md:grid-cols-3"
-                          : templateSkin === "modern"
-                            ? "grid-cols-2 md:grid-cols-4"
-                            : "grid-cols-2 md:grid-cols-3"
-                      }`}
+                      className={
+                        isClassic
+                          ? "grid grid-cols-2 gap-2 md:grid-cols-3"
+                          : `grid gap-3 ${
+                              templateSkin === "modern" || templateSkin === "birthday"
+                                ? "grid-cols-2 md:grid-cols-4"
+                                : "grid-cols-2 md:grid-cols-3"
+                            }`
+                      }
                     >
                       {images.map((item) => (
                         <button
                           key={item.id}
                           type="button"
                           onClick={() => setLightbox(item)}
-                          className="aspect-square overflow-hidden cursor-pointer focus:outline-none"
+                          className={`overflow-hidden cursor-pointer focus:outline-none ${
+                            isClassic ? "aspect-[4/5] md:first:col-span-1" : "aspect-square"
+                          }`}
                           style={{
                             borderRadius:
-                              templateSkin === "modern" ? "4px" : "12px",
+                              templateSkin === "modern" ||
+                              templateSkin === "birthday" ||
+                              isClassic
+                                ? "2px"
+                                : "12px",
+                            backgroundColor: primaryColor,
                           }}
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={item.thumbnailUrl ?? item.url}
                             alt={item.altText ?? ""}
-                            className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                            className="h-full w-full object-cover transition-transform duration-700 hover:scale-105"
                           />
                         </button>
                       ))}
                     </div>
                   )}
+                  {cfg(config, "hint") && images.length > 0 && (
+                    <p className="mt-8 text-center text-[9px] uppercase tracking-[0.4em] opacity-50">
+                      {cfg(config, "hint")}
+                    </p>
+                  )}
                   {pdfs.length > 0 && (
-                    <div className="mt-8 text-center space-y-2">
+                    <div className="mt-8 space-y-2 text-center">
                       {pdfs.map((p) => (
                         <a
                           key={p.id}
@@ -1041,11 +1398,10 @@ function PublicInvitationInner() {
                     color: primaryColor,
                   }}
                 >
-                  {(config.heading as string) || "Δώρα"}
+                  {cfg(config, "heading")}
                 </h2>
                 <p className="opacity-60 text-sm max-w-md mx-auto">
-                  {(config.text as string) ||
-                    "Η παρουσία σας είναι το καλύτερο δώρο."}
+                  {cfg(config, "text")}
                 </p>
                 {config.iban && (
                   <button
@@ -1067,37 +1423,41 @@ function PublicInvitationInner() {
 
           case "video":
             return (
-              <section key={section.id} className="px-6 py-16">
-                <div className="max-w-2xl mx-auto">
-                  <h2
-                    className="text-2xl font-semibold text-center mb-8"
-                    style={{
-                      fontFamily: `${displayFont}, serif`,
-                      color: primaryColor,
-                    }}
-                  >
-                    {(config.heading as string) || "Βίντεο"}
-                  </h2>
+              <section
+                key={section.id}
+                className={isClassic ? "bg-[#0F0F0D] px-6 py-20" : "px-6 py-16"}
+              >
+                <div className={`mx-auto ${isClassic ? "max-w-5xl" : "max-w-2xl"}`}>
+                  <SectionIntro
+                    heading={cfg(config, "heading")}
+                    label={cfg(config, "label")}
+                    displayFont={displayFont}
+                    primaryColor={primaryColor}
+                    classic={isClassic}
+                    light={isClassic}
+                  />
                   {videos[0] ? (
                     <video
                       src={videos[0].url}
                       controls
-                      className="w-full aspect-video rounded-lg bg-black"
+                      className="aspect-video w-full rounded-sm bg-black"
                       poster={images[0]?.url}
                     />
                   ) : config.youtubeUrl || config.embedUrl ? (
-                    <div className="aspect-video rounded-lg overflow-hidden">
+                    <div className="aspect-video overflow-hidden rounded-sm">
                       <iframe
                         src={String(config.youtubeUrl || config.embedUrl)}
                         title="Video"
-                        className="w-full h-full"
+                        className="h-full w-full"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowFullScreen
                       />
                     </div>
                   ) : (
-                    <p className="text-center text-sm opacity-50">
-                      Δεν υπάρχει βίντεο ακόμα.
+                    <p
+                      className={`text-center text-sm ${isClassic ? "text-white/40" : "opacity-50"}`}
+                    >
+                      {cfg(config, "emptyText")}
                     </p>
                   )}
                 </div>
@@ -1108,13 +1468,34 @@ function PublicInvitationInner() {
             return (
               <footer
                 key={section.id}
-                className="px-6 py-8 text-center text-sm"
-                style={{
-                  backgroundColor: primaryColor,
-                  color: "rgba(255,255,255,0.7)",
-                }}
+                className={isClassic ? "px-6 py-20 text-center" : "px-6 py-8 text-center text-sm"}
+                style={
+                  isClassic
+                    ? { backgroundColor: bgColor }
+                    : {
+                        backgroundColor: primaryColor,
+                        color: "rgba(255,255,255,0.7)",
+                      }
+                }
               >
-                {(config.text as string) || ""}
+                {isClassic && <ClassicOrnament color={primaryColor} />}
+                <p
+                  className={isClassic ? "mt-8 mb-4 text-[2rem] italic opacity-50" : undefined}
+                  style={
+                    isClassic ? { fontFamily: `${displayFont}, serif` } : undefined
+                  }
+                >
+                  {(config.text as string) || ""}
+                </p>
+                {isClassic && eventDate && (
+                  <p className="text-[9px] uppercase tracking-[0.45em] opacity-50">
+                    {eventDate.toLocaleDateString("el-GR", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                    }).replace(/\//g, " · ")}
+                  </p>
+                )}
               </footer>
             );
 
@@ -1169,7 +1550,7 @@ function CountdownSection({
           color: primaryColor,
         }}
       >
-        {(config.heading as string) || "Αντίστροφη μέτρηση"}
+        {cfg(config, "heading")}
       </h2>
       <div className="flex justify-center gap-6">
         {[

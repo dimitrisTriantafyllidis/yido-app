@@ -147,7 +147,7 @@ public class MediaController(
     [RequestSizeLimit(MaxVideoSize)]
     [RequestFormLimits(MultipartBodyLengthLimit = MaxVideoSize)]
     [EnableRateLimiting("upload")]
-    public async Task<IActionResult> Upload(Guid eventId, IFormFile file)
+    public async Task<IActionResult> Upload(Guid eventId, IFormFile file, [FromQuery] int? sortOrder = null)
     {
         if (tenantContext.TenantId is null) return Forbid();
         var tenantId = tenantContext.TenantId.Value;
@@ -238,6 +238,22 @@ public class MediaController(
         if (isImage)
             thumbPath = await fileStorage.GenerateThumbnailAsync(tenantId, eventId, storedPath);
 
+        // Replacing a template image slot: free that sortOrder for owner images
+        if (isImage && sortOrder.HasValue)
+        {
+            var previous = await db.MediaFiles
+                .Where(m => m.EventId == eventId
+                            && m.TenantId == tenantId
+                            && !m.IsGuestUpload
+                            && m.MediaType == MediaType.Image
+                            && m.SortOrder == sortOrder.Value)
+                .ToListAsync();
+            foreach (var old in previous)
+            {
+                old.SortOrder = 1000 + old.SortOrder;
+            }
+        }
+
         var mediaFile = new MediaFile
         {
             Id = Guid.NewGuid(),
@@ -249,10 +265,19 @@ public class MediaController(
             ContentType = file.ContentType,
             FileSizeBytes = file.Length,
             ThumbnailFileName = thumbPath,
-            SortOrder = await db.MediaFiles.CountAsync(m => m.EventId == eventId)
+            SortOrder = sortOrder ?? await db.MediaFiles.CountAsync(m => m.EventId == eventId)
         };
 
         db.MediaFiles.Add(mediaFile);
+
+        // Slot 0 doubles as the event cover for wedding templates
+        if (isImage && sortOrder == 0)
+        {
+            var evt = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId && e.TenantId == tenantId);
+            if (evt is not null)
+                evt.CoverImageUrl = storedPath;
+        }
+
         await db.SaveChangesAsync();
 
         return Ok(new
@@ -262,6 +287,7 @@ public class MediaController(
             mediaFile.ContentType,
             mediaFile.FileSizeBytes,
             MediaType = mediaFile.MediaType.ToString(),
+            mediaFile.SortOrder,
             Url = fileStorage.GetFileUrl(storedPath),
             ThumbnailUrl = thumbPath != null ? fileStorage.GetFileUrl(thumbPath) : null,
             mediaFile.CreatedAt

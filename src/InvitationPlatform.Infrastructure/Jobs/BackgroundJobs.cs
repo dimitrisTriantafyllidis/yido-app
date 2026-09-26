@@ -2,6 +2,7 @@ using InvitationPlatform.Application.Common.Interfaces;
 using InvitationPlatform.Domain.Enums;
 using InvitationPlatform.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -86,14 +87,87 @@ public static class BackgroundJobs
             """;
         await emailSender.SendAsync(toEmail, "Επιβεβαίωση email — YIDO", html, ct);
     }
+
+    public static async Task SendInvitationEmail(
+        ApplicationDbContext db,
+        IEmailSender emailSender,
+        string frontendUrl,
+        Guid guestId,
+        ILogger? logger = null,
+        CancellationToken ct = default)
+    {
+        var guest = await db.Guests
+            .Include(g => g.Event)
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(g => g.Id == guestId && !g.IsDeleted, ct);
+
+        if (guest is null)
+        {
+            logger?.LogWarning("SendInvitationEmail: Guest {GuestId} not found", guestId);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(guest.Email))
+        {
+            logger?.LogWarning("SendInvitationEmail: Guest {GuestId} has no email", guestId);
+            return;
+        }
+
+        var evt = guest.Event;
+        if (evt is null || evt.IsDeleted || string.IsNullOrWhiteSpace(evt.Slug))
+        {
+            logger?.LogWarning("SendInvitationEmail: Event for guest {GuestId} not published or deleted", guestId);
+            return;
+        }
+
+        var invitationUrl = $"{frontendUrl.TrimEnd('/')}/e/{evt.Slug}?t={guest.InviteToken}";
+        var guestName = $"{guest.FirstName} {guest.LastName}".Trim();
+        var eventTitle = evt.Title;
+        var eventDate = evt.EventDate?.ToString("dd MMMM yyyy", new System.Globalization.CultureInfo("el-GR")) ?? "";
+
+        var html = $"""
+            <!DOCTYPE html>
+            <html lang="el">
+            <head><meta charset="UTF-8"></head>
+            <body style="font-family: 'Segoe UI', Tahoma, sans-serif; line-height: 1.6; color: #1A1A18; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h1 style="color: #2E5A4C; margin: 0; font-size: 24px;">Πρόσκληση</h1>
+                </div>
+                <p>Αγαπητέ/ή {System.Net.WebUtility.HtmlEncode(guestName)},</p>
+                <p>Σας προσκαλούμε στο <strong>{System.Net.WebUtility.HtmlEncode(eventTitle)}</strong>{(string.IsNullOrEmpty(eventDate) ? "" : $" στις {eventDate}")}.</p>
+                <p>Για να δείτε την πρόσκληση και να δηλώσετε συμμετοχή, πατήστε τον παρακάτω σύνδεσμο:</p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{System.Net.WebUtility.HtmlEncode(invitationUrl)}" 
+                       style="display: inline-block; background-color: #2E5A4C; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 500;">
+                        Δείτε την πρόσκληση
+                    </a>
+                </div>
+                <p style="color: #5C5A54; font-size: 14px;">Αυτός ο σύνδεσμος είναι προσωπικός για εσάς.</p>
+                <hr style="border: none; border-top: 1px solid #E8E5E0; margin: 30px 0;">
+                <p style="color: #9C9A94; font-size: 12px; text-align: center;">— YIDO</p>
+            </body>
+            </html>
+            """;
+
+        await emailSender.SendAsync(guest.Email, $"Πρόσκληση — {eventTitle}", html, ct);
+
+        guest.InvitationSentAt = DateTime.UtcNow;
+        guest.InvitationSentVia = SentVia.Email;
+        await db.SaveChangesAsync(ct);
+
+        logger?.LogInformation("Sent invitation email to guest {GuestId} ({Email})", guestId, guest.Email);
+    }
 }
 
 /// <summary>Hangfire-activatable job methods (constructor DI).</summary>
 public class HangfireJobRunner(
     ApplicationDbContext db,
     IEmailSender emailSender,
+    IConfiguration configuration,
     ILogger<HangfireJobRunner> logger)
 {
+    private string FrontendUrl => configuration["Frontend:Url"] ?? "http://localhost:3000";
+
     public Task ExpireEventsAndSubscriptions() =>
         BackgroundJobs.ExpireEventsAndSubscriptions(db, logger);
 
@@ -105,4 +179,7 @@ public class HangfireJobRunner(
 
     public Task SendEmailVerification(string toEmail, string verifyUrl) =>
         BackgroundJobs.SendEmailVerification(emailSender, toEmail, verifyUrl);
+
+    public Task SendInvitationEmail(Guid guestId) =>
+        BackgroundJobs.SendInvitationEmail(db, emailSender, FrontendUrl, guestId, logger);
 }

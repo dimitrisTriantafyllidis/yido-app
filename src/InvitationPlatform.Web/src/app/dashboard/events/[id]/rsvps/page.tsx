@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useAuth } from "@/lib/auth-context";
+import { DashboardIcon } from "@/components/dashboard/dashboard-icons";
 import { api } from "@/lib/api";
 
 interface RsvpData {
@@ -34,23 +34,78 @@ interface RsvpStats {
   mealPreferences: { preference: string; count: number }[];
 }
 
+const RSVP_STATUS = {
+  attending: {
+    pill: "bg-[#E3F3EA] text-[#1B5E3A]",
+    label: "Θα έρθω",
+  },
+  declined: {
+    pill: "bg-[#FDF0F0] text-[#A82020]",
+    label: "Δεν θα έρθω",
+  },
+} as const;
+
+function getInitials(name: string | null): string {
+  if (!name?.trim()) return "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return `${parts[0]![0]}${parts[parts.length - 1]![0]}`.toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
+
+function formatPeopleCount(adultCount: number, childrenCount: number): string {
+  const total = adultCount + childrenCount;
+  if (childrenCount > 0) {
+    return `${total} (${adultCount} ενήλ. + ${childrenCount} παιδ${childrenCount === 1 ? "ί" : "ιά"})`;
+  }
+  if (adultCount > 1) {
+    return `${total} (${adultCount} ενήλικες)`;
+  }
+  return `${total}`;
+}
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("el-GR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatSource(source: string): string {
+  if (source === "Online") return "Digital";
+  if (source === "Manual") return "Χειροκίνητη";
+  return source;
+}
+
+function formatResponse(attending: boolean | null): { pill: string; label: string } | null {
+  if (attending === true) return RSVP_STATUS.attending;
+  if (attending === false) return RSVP_STATUS.declined;
+  return null;
+}
+
 export default function RsvpsPage() {
   const params = useParams();
-  const { logout } = useAuth();
   const eventId = params.id as string;
 
   const [rsvps, setRsvps] = useState<RsvpData[]>([]);
   const [stats, setStats] = useState<RsvpStats | null>(null);
+  const [eventTitle, setEventTitle] = useState<string>("Εκδήλωση");
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
-      const [rsvpData, statsData] = await Promise.all([
+      const [rsvpData, statsData, eventData] = await Promise.all([
         api<RsvpData[]>(`/api/v1/events/${eventId}/rsvps`),
         api<RsvpStats>(`/api/v1/events/${eventId}/rsvps/statistics`),
+        api<{ title: string }>(`/api/v1/events/${eventId}`).catch(() => null),
       ]);
       setRsvps(rsvpData);
       setStats(statsData);
+      if (eventData?.title) setEventTitle(eventData.title);
     } catch {
       // empty
     } finally {
@@ -62,193 +117,218 @@ export default function RsvpsPage() {
     load();
   }, [load]);
 
-  const formatDate = (dateStr: string) =>
-    new Date(dateStr).toLocaleDateString("el-GR", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  const exportCsv = () => {
+    const headers = [
+      "Όνομα",
+      "Email",
+      "Απάντηση",
+      "Ενήλικες",
+      "Παιδιά",
+      "Γεύμα",
+      "Σημειώσεις",
+      "Πηγή",
+      "Ημ/νία",
+    ];
+    const rows = rsvps.map((r) => [
+      r.guestName ?? "",
+      r.guestEmail ?? "",
+      r.attendingReception === true
+        ? "Θα έρθω"
+        : r.attendingReception === false
+          ? "Δεν θα έρθω"
+          : "",
+      r.adultCount,
+      r.childrenCount,
+      r.mealPreference ?? "",
+      r.notes ?? r.dietaryNotes ?? "",
+      formatSource(r.source),
+      formatDate(r.submittedAt),
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) =>
+        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
+      )
+      .join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `rsvps-${eventId}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
-    <div className="min-h-screen bg-bg">
-      <header className="border-b border-border bg-surface">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link
-              href="/"
-              className="font-display text-lg font-semibold text-text-primary"
-            >
-              YIDO
-            </Link>
-            <span className="text-text-muted">/</span>
-            <Link
-              href={`/dashboard/events/${eventId}`}
-              className="text-sm text-text-secondary hover:text-text-primary transition-colors"
-            >
-              Εκδήλωση
-            </Link>
-            <span className="text-text-muted">/</span>
-            <span className="text-sm text-text-primary font-medium">
-              Απαντήσεις RSVP
-            </span>
-          </div>
-          <button
-            onClick={logout}
-            className="text-sm text-text-muted hover:text-text-primary cursor-pointer"
+    <main className="flex flex-col gap-8 px-6 py-10 pb-12 md:px-12">
+      <section className="flex flex-col gap-1.5">
+        <nav className="flex flex-wrap items-center gap-1 text-xs">
+          <Link href="/dashboard" className="text-[#6E5B5D] hover:text-[#1C1516]">
+            Εκδηλώσεις
+          </Link>
+          <DashboardIcon name="chevron-right" className="size-3 text-[#6E5B5D]" />
+          <Link
+            href={`/dashboard/events/${eventId}`}
+            className="text-[#6E5B5D] hover:text-[#1C1516]"
           >
-            Αποσύνδεση
+            {eventTitle}
+          </Link>
+          <DashboardIcon name="chevron-right" className="size-3 text-[#6E5B5D]" />
+          <span className="font-medium text-[#7A1C2E]">Στατιστικά RSVP</span>
+        </nav>
+        <h1 className="font-display text-[32px] text-[#1C1516]">Απαντήσεις RSVP</h1>
+      </section>
+
+      {stats ? (
+        <section className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+          <RsvpStatCard
+            label="Επιβεβαιωμένοι"
+            value={stats.confirmed}
+            hint="Θα παρευρεθούν"
+          />
+          <RsvpStatCard label="Αρνήθηκαν" value={stats.declined} hint="Δεν θα έρθουν" />
+          <RsvpStatCard
+            label="Εκκρεμούν (λίστα)"
+            value={stats.pending}
+            hint="Δεν έχουν απαντήσει"
+            valueClass="text-[#A87D2C]"
+            badge="ΛΙΣΤΑ"
+          />
+          <RsvpStatCard
+            label="Δημόσια RSVP"
+            value={stats.publicRsvps}
+            hint={`Σύνολο απαντήσεων: ${stats.totalRsvps}`}
+          />
+          <RsvpStatCard
+            label="Σύνολο ατόμων"
+            value={stats.totalAdults + stats.totalChildren}
+            hint={`${stats.totalAdults} ενήλ. + ${stats.totalChildren} παιδ.`}
+          />
+        </section>
+      ) : null}
+
+      <section className="overflow-hidden rounded-xl border border-[#EDE8E3] bg-white p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-display text-xl text-[#1C1516]">
+            Απαντήσεις RSVP ({rsvps.length})
+          </h2>
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={rsvps.length === 0}
+            className="flex items-center gap-2 rounded-lg border border-[#EDE8E3] px-4 py-2 text-[13px] font-medium text-[#6E6263] transition-colors hover:text-[#1C1516] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <DashboardIcon name="download" className="size-3.5" />
+            Εξαγωγή CSV
           </button>
         </div>
-      </header>
-
-      <main className="max-w-6xl mx-auto px-6 py-8">
-        {/* Stats */}
-        {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-            <div className="p-5 bg-surface border border-border rounded-lg">
-              <p className="text-sm text-text-muted">Επιβεβαιωμένοι</p>
-              <p className="mt-1 font-display text-3xl font-semibold text-success">
-                {stats.confirmed}
-              </p>
-            </div>
-            <div className="p-5 bg-surface border border-border rounded-lg">
-              <p className="text-sm text-text-muted">Αρνήθηκαν</p>
-              <p className="mt-1 font-display text-3xl font-semibold text-destructive">
-                {stats.declined}
-              </p>
-            </div>
-            <div className="p-5 bg-surface border border-border rounded-lg">
-              <p className="text-sm text-text-muted">Εκκρεμούν (λίστα)</p>
-              <p className="mt-1 font-display text-3xl font-semibold text-warning">
-                {stats.pending}
-              </p>
-            </div>
-            <div className="p-5 bg-surface border border-border rounded-lg">
-              <p className="text-sm text-text-muted">Δημόσια RSVP</p>
-              <p className="mt-1 font-display text-3xl font-semibold text-text-primary">
-                {stats.publicRsvps}
-              </p>
-              <p className="text-xs text-text-muted mt-1">
-                Σύνολο απαντήσεων: {stats.totalRsvps}
-              </p>
-            </div>
-            <div className="p-5 bg-surface border border-border rounded-lg">
-              <p className="text-sm text-text-muted">
-                Σύνολο ατόμων
-              </p>
-              <p className="mt-1 font-display text-3xl font-semibold text-accent">
-                {stats.totalAdults + stats.totalChildren}
-              </p>
-              <p className="text-xs text-text-muted mt-1">
-                {stats.totalAdults} ενήλ. + {stats.totalChildren} παιδ.
-              </p>
-            </div>
-          </div>
-        )}
-
-        <h1 className="font-display text-xl font-semibold text-text-primary mb-6">
-          Απαντήσεις RSVP ({rsvps.length})
-        </h1>
 
         {loading ? (
-          <div className="flex justify-center py-20">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+          <div className="flex items-center justify-center py-24">
+            <div className="size-8 animate-spin rounded-full border-2 border-[#C4993D] border-t-transparent" />
           </div>
         ) : rsvps.length === 0 ? (
-          <div className="text-center py-16 bg-surface border border-border rounded-xl">
-            <p className="text-text-muted">
-              Δεν υπάρχουν απαντήσεις ακόμα.
-            </p>
+          <div className="py-16 text-center">
+            <p className="text-[#9C9293]">Δεν υπάρχουν απαντήσεις ακόμα.</p>
           </div>
         ) : (
-          <div className="bg-surface border border-border rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-bg">
-                  <th className="text-left px-4 py-3 font-medium text-text-secondary">
-                    Όνομα
-                  </th>
-                  <th className="text-center px-4 py-3 font-medium text-text-secondary">
-                    Απάντηση
-                  </th>
-                  <th className="text-center px-4 py-3 font-medium text-text-secondary">
-                    Άτομα
-                  </th>
-                  <th className="text-left px-4 py-3 font-medium text-text-secondary">
-                    Γεύμα
-                  </th>
-                  <th className="text-left px-4 py-3 font-medium text-text-secondary">
-                    Σημειώσεις
-                  </th>
-                  <th className="text-left px-4 py-3 font-medium text-text-secondary">
-                    Πηγή
-                  </th>
-                  <th className="text-left px-4 py-3 font-medium text-text-secondary">
-                    Ημ/νία
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rsvps.map((r) => (
-                  <tr
+          <div className="overflow-x-auto">
+            <div className="min-w-[960px]">
+              <div className="flex gap-3 rounded-lg bg-[#F9F8F6] px-4 py-3 text-xs font-semibold text-[#7A1C2E]">
+                <span className="w-[180px] shrink-0">Όνομα</span>
+                <span className="w-[110px] shrink-0">Απάντηση</span>
+                <span className="w-[120px] shrink-0">Άτομα</span>
+                <span className="w-[120px] shrink-0">Γεύμα</span>
+                <span className="min-w-0 flex-1">Σημειώσεις</span>
+                <span className="w-[100px] shrink-0">Πηγή</span>
+                <span className="w-[140px] shrink-0">Ημ/νία</span>
+              </div>
+
+              {rsvps.map((r) => {
+                const response = formatResponse(r.attendingReception);
+                const notes = r.notes || r.dietaryNotes;
+
+                return (
+                  <div
                     key={r.id}
-                    className="border-b border-border last:border-0 hover:bg-bg/50"
+                    className="flex items-center gap-3 border-b border-[#EADFCB] px-4 py-4 last:border-0"
                   >
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-text-primary">
+                    <div className="flex w-[180px] shrink-0 items-center gap-2.5">
+                      <span className="flex size-7 shrink-0 items-center justify-center rounded-[14px] bg-[#F9F8F6] text-xs font-semibold text-[#7A1C2E]">
+                        {getInitials(r.guestName)}
+                      </span>
+                      <span className="truncate text-[13px] font-medium text-[#1C1516]">
                         {r.guestName || "—"}
-                      </p>
-                      {r.guestEmail && (
-                        <p className="text-xs text-text-muted">
-                          {r.guestEmail}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {r.attendingReception ? (
-                        <span className="text-xs px-2 py-0.5 rounded-md bg-success-light text-success">
-                          Ναι
-                        </span>
-                      ) : r.attendingReception === false ? (
-                        <span className="text-xs px-2 py-0.5 rounded-md bg-destructive-light text-destructive">
-                          Όχι
+                      </span>
+                    </div>
+
+                    <span className="w-[110px] shrink-0">
+                      {response ? (
+                        <span
+                          className={`inline-flex rounded-md px-2 py-1 text-[11px] font-semibold ${response.pill}`}
+                        >
+                          {response.label}
                         </span>
                       ) : (
-                        <span className="text-xs text-text-muted">—</span>
+                        <span className="text-[13px] text-[#9C9293]">—</span>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-center text-text-secondary">
-                      {r.adultCount}
-                      {r.childrenCount > 0 && `+${r.childrenCount}`}
-                      {r.plusOneName && (
-                        <span className="block text-xs text-text-muted">
-                          +{r.plusOneName}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-text-secondary">
+                    </span>
+
+                    <span className="w-[120px] shrink-0 text-[13px] text-[#1F1617]">
+                      {formatPeopleCount(r.adultCount, r.childrenCount)}
+                    </span>
+
+                    <span className="w-[120px] shrink-0 text-[13px] text-[#6E5B5D]">
                       {r.mealPreference || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-text-secondary max-w-[200px] truncate">
-                      {r.notes || r.dietaryNotes || "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs text-text-muted">
-                        {r.source === "Online" ? "Online" : "Χειροκίνητη"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-text-muted">
+                    </span>
+
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-[#6E5B5D]">
+                      {notes || "—"}
+                    </span>
+
+                    <span className="flex w-[100px] shrink-0 items-center gap-1 text-[13px] text-[#6E5B5D]">
+                      <DashboardIcon name="globe" className="size-3" />
+                      {formatSource(r.source)}
+                    </span>
+
+                    <span className="w-[140px] shrink-0 text-[13px] text-[#6E5B5D]">
                       {formatDate(r.submittedAt)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
-      </main>
+      </section>
+    </main>
+  );
+}
+
+function RsvpStatCard({
+  label,
+  value,
+  hint,
+  valueClass = "text-[#1C1516]",
+  badge,
+}: {
+  label: string;
+  value: ReactNode;
+  hint: string;
+  valueClass?: string;
+  badge?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-[#EDE8E3] bg-white p-5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[#6E6263]">{label}</p>
+      <div className="flex items-baseline gap-2">
+        <p className={`text-2xl font-bold ${valueClass}`}>{value}</p>
+        {badge ? (
+          <span className="rounded bg-[#FAF3DF] px-1.5 py-0.5 text-[10px] font-bold uppercase text-[#A87D2C]">
+            {badge}
+          </span>
+        ) : null}
+      </div>
+      <p className="text-[11px] text-[#9C9293]">{hint}</p>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 using InvitationPlatform.Domain.Entities;
+using InvitationPlatform.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -18,6 +19,7 @@ public class GuestConfiguration : IEntityTypeConfiguration<Guest>
         builder.Property(g => g.Tags).HasMaxLength(500);
         builder.Property(g => g.Notes).HasMaxLength(1000);
         builder.Property(g => g.InviteToken).HasMaxLength(64).IsRequired();
+        builder.Property(g => g.InvitationSentVia).HasConversion<byte>();
         builder.Property(g => g.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
 
         builder.HasOne(g => g.Event)
@@ -30,8 +32,15 @@ public class GuestConfiguration : IEntityTypeConfiguration<Guest>
             .HasForeignKey(g => g.GuestGroupId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        builder.HasOne(g => g.EventTable)
+            .WithMany(t => t.Guests)
+            .HasForeignKey(g => g.EventTableId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasIndex(g => new { g.TenantId, g.EventId });
         builder.HasIndex(g => g.InviteToken).IsUnique();
-        builder.HasQueryFilter(g => !g.IsDeleted);
+        builder.HasIndex(g => g.EventTableId);
+
+        // Note: Query filter (soft-delete + tenant) is applied centrally in ApplicationDbContext
     }
 }

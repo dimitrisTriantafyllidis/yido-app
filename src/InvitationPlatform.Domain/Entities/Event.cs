@@ -31,4 +31,6 @@ public class Event : BaseEntity, ITenantEntity, ISoftDeletable
     public ICollection<GuestGroup> GuestGroups { get; set; } = [];
     public ICollection<Guest> Guests { get; set; } = [];
     public ICollection<Rsvp> Rsvps { get; set; } = [];
+    public ICollection<EventTable> Tables { get; set; } = [];
+    public ICollection<GuestWish> Wishes { get; set; } = [];
 }

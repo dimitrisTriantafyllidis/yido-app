@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { api } from "@/lib/api";
 
 interface FeatureInfo {
@@ -37,53 +37,98 @@ interface SubscriptionInfo {
   expiresAt: string | null;
 }
 
+const CARD_FEATURE_KEYS = [
+  "guest_photo_uploads",
+  "rsvp_full",
+  "background_audio",
+  "max_guests",
+  "premium_templates",
+  "custom_slug",
+] as const;
+
+const COMPARISON_KEYS = [
+  "rsvp_full",
+  "background_audio",
+  "video_section",
+  "custom_slug",
+  "gallery",
+  "premium_templates",
+  "seating_plan",
+] as const;
+
 const FEATURE_LABELS: Record<string, string> = {
   custom_slug: "Προσαρμοσμένο URL",
-  rsvp_full: "Πλήρες RSVP (γεύμα, ερωτήσεις, +1)",
+  rsvp_full: "Πλήρες RSVP",
   max_guests: "Μέγιστος αριθμός καλεσμένων",
   guest_photo_uploads: "Φωτογραφίες καλεσμένων (QR)",
   gallery: "Γκαλερί φωτογραφιών",
   max_photos: "Μέγιστος αριθμός φωτογραφιών",
   video_section: "Ενότητα βίντεο",
   background_audio: "Μουσική υπόκρουση",
-  qr_code: "QR Code πρόσκλησης",
-  gift_list: "Λίστα δώρων",
-  custom_colors: "Προσαρμοσμένα χρώματα",
-  custom_fonts: "Προσαρμοσμένες γραμματοσειρές",
   premium_templates: "Premium πρότυπα",
-  printable_upload: "Ανέβασμα εκτυπώσιμου",
-  excel_export: "Εξαγωγή Excel",
-  max_emails: "Email προσκλήσεις",
-  event_duration_months: "Διάρκεια εκδήλωσης (μήνες)",
+  seating_plan: "Κατανομή τραπεζιών",
 };
 
-function formatFeatureValue(f: FeatureInfo): string {
-  if (f.valueType === "Boolean") {
-    return f.booleanValue ? "Ναι" : "Όχι";
-  }
-  if (f.valueType === "Integer") {
-    if (f.integerValue === -1) return "Απεριόριστο";
-    return f.integerValue?.toString() ?? "—";
-  }
-  if (f.valueType === "String") {
-    if (f.stringValue === "none") return "Όχι";
-    if (f.stringValue === "limited") return "Βασικές";
-    if (f.stringValue === "full") return "Πλήρης";
-    return f.stringValue ?? "—";
-  }
-  return "—";
-}
-
-function featureIncluded(f: FeatureInfo): boolean {
+function featureIncluded(f: FeatureInfo | undefined): boolean {
+  if (!f) return false;
   if (f.valueType === "Boolean") return f.booleanValue === true;
   if (f.valueType === "Integer") return (f.integerValue ?? 0) > 0;
   if (f.valueType === "String") return f.stringValue !== "none";
   return false;
 }
 
+function formatBoolean(value: boolean): string {
+  return value ? "Ναι" : "Όχι";
+}
+
+function formatCardFeatureValue(f: FeatureInfo | undefined, key: string, tier: string): string {
+  if (!f) return "—";
+
+  if (key === "guest_photo_uploads") {
+    if (!f.booleanValue) return "Όχι";
+    return tier === "Video" ? "Απεριόριστες" : "Ναι";
+  }
+
+  if (key === "max_guests") {
+    if (f.integerValue === -1) return "Απεριόριστο";
+    return f.integerValue?.toString() ?? "—";
+  }
+
+  if (f.valueType === "Boolean") return formatBoolean(f.booleanValue === true);
+  if (f.valueType === "Integer") {
+    if (f.integerValue === -1) return "Απεριόριστο";
+    return f.integerValue?.toString() ?? "—";
+  }
+
+  return f.stringValue ?? "—";
+}
+
+function formatComparisonValue(
+  f: FeatureInfo | undefined,
+  key: string,
+  tier: string
+): string {
+  if (key === "gallery") {
+    if (tier === "Video" && featureIncluded(f)) return "Premium με Video";
+    if (tier === "Digital" && featureIncluded(f)) return "Premium";
+    if (tier === "Mini") return "Βασική";
+    return featureIncluded(f) ? "Premium" : "Όχι";
+  }
+
+  if (!f) return "—";
+  if (f.valueType === "Boolean") return formatBoolean(f.booleanValue === true);
+  if (f.valueType === "Integer") {
+    if (f.integerValue === -1) return "Απεριόριστο";
+    return f.integerValue?.toString() ?? "—";
+  }
+  if (f.stringValue === "limited") return "Βασικές";
+  if (f.stringValue === "full") return "Πλήρεις";
+  if (f.stringValue === "none") return "Όχι";
+  return f.stringValue ?? "—";
+}
+
 export default function PricingPage() {
   const params = useParams();
-  const router = useRouter();
   const eventId = params.id as string;
 
   const [packages, setPackages] = useState<PackageInfo[]>([]);
@@ -97,7 +142,7 @@ export default function PricingPage() {
         api<PackageInfo[]>("/api/v1/packages"),
         api<SubscriptionInfo>(`/api/v1/subscriptions/event/${eventId}`).catch(() => null),
       ]);
-      setPackages(pkgs);
+      setPackages(pkgs.sort((a, b) => a.priceAmount - b.priceAmount));
       setSubscription(sub);
     } catch {
       // ignore
@@ -134,170 +179,251 @@ export default function PricingPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-gray-500">Φόρτωση πακέτων...</div>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="size-8 animate-spin rounded-full border-2 border-[#C4993D] border-t-transparent" />
       </div>
     );
   }
 
-  // Gather all unique feature keys across packages for comparison table
-  const allFeatureKeys: string[] = [];
-  for (const pkg of packages) {
-    for (const f of pkg.features) {
-      if (!allFeatureKeys.includes(f.key)) allFeatureKeys.push(f.key);
-    }
-  }
-
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      <div className="mb-6">
+    <main className="flex flex-col gap-8 px-6 py-10 pb-12 md:px-12">
+      <section className="flex flex-col gap-3">
         <Link
           href={`/dashboard/events/${eventId}`}
-          className="text-sm text-[#2E5A4C] hover:underline"
+          className="inline-flex items-center gap-1 text-sm font-semibold text-[#C4993D] hover:underline"
         >
-          &larr; Πίσω στην εκδήλωση
+          <ArrowLeftIcon />
+          Πίσω στην εκδήλωση
         </Link>
-      </div>
-
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Επιλογή Πακέτου</h1>
-      <p className="text-gray-600 mb-8">
-        Επιλέξτε το πακέτο που ταιριάζει στις ανάγκες σας.
-      </p>
-
-      {subscription && (
-        <div className="mb-8 p-4 bg-green-50 border border-green-200 rounded-lg">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
-            <span className="font-semibold text-green-800">
-              Ενεργή Συνδρομή: {subscription.packageName}
-            </span>
-          </div>
-          <p className="text-sm text-green-700">
-            Κατάσταση: {subscription.status === "Active" ? "Ενεργή" : subscription.status}
-            {subscription.expiresAt && (
-              <> &middot; Λήξη: {new Date(subscription.expiresAt).toLocaleDateString("el")}</>
-            )}
+        <div>
+          <h1 className="font-display text-4xl text-[#1C1516]">Επιλογή Πακέτου</h1>
+          <p className="mt-1 text-[15px] text-[#6E6263]">
+            Επιλέξτε το πακέτο που ταιριάζει στις ανάγκες σας.
           </p>
         </div>
-      )}
+      </section>
 
-      {/* Package Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+      {subscription ? (
+        <div className="flex items-center gap-2 rounded-lg border border-[#1B5E3A]/15 bg-[#E3F3EA] p-4 text-sm text-[#1B5E3A]">
+          <span className="size-2 shrink-0 rounded-full bg-[#1B5E3A]" aria-hidden />
+          <p>
+            <span className="font-bold">Ενεργή Συνδρομή:</span> {subscription.packageName}
+            {" · "}
+            <span className="font-bold">Κατάσταση:</span>{" "}
+            {subscription.status === "Active" ? "Ενεργή" : subscription.status}
+            {subscription.expiresAt ? (
+              <>
+                {" · "}
+                <span className="font-bold">Λήξη:</span>{" "}
+                {new Date(subscription.expiresAt).toLocaleDateString("el-GR")}
+              </>
+            ) : null}
+          </p>
+        </div>
+      ) : null}
+
+      <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {packages.map((pkg) => {
-          const isActive = subscription?.packageTier === pkg.tier && subscription?.status === "Active";
+          const isActive =
+            subscription?.packageTier === pkg.tier && subscription?.status === "Active";
           const isPopular = pkg.tier === "Digital";
 
           return (
-            <div
+            <PricingCard
               key={pkg.id}
-              className={`relative border rounded-xl p-6 flex flex-col ${
-                isPopular
-                  ? "border-[#2E5A4C] ring-2 ring-[#2E5A4C]/20"
-                  : "border-gray-200"
-              }`}
-            >
-              {isPopular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#2E5A4C] text-white text-xs px-3 py-1 rounded-full font-medium">
-                  Δημοφιλές
-                </div>
-              )}
-
-              <h2 className="text-xl font-bold text-gray-900 mb-1">{pkg.displayName}</h2>
-              <p className="text-sm text-gray-500 mb-4">{pkg.description}</p>
-
-              <div className="mb-6">
-                <span className="text-3xl font-bold text-gray-900">{pkg.priceAmount}€</span>
-                <span className="text-gray-500 text-sm ml-1">/ εκδήλωση</span>
-              </div>
-
-              <ul className="space-y-2 mb-6 flex-1">
-                {pkg.features.map((f) => (
-                  <li key={f.key} className="flex items-center gap-2 text-sm">
-                    <span
-                      className={`text-base ${
-                        featureIncluded(f) ? "text-green-600" : "text-gray-300"
-                      }`}
-                    >
-                      {featureIncluded(f) ? "\u2713" : "\u2717"}
-                    </span>
-                    <span className={featureIncluded(f) ? "text-gray-700" : "text-gray-400"}>
-                      {FEATURE_LABELS[f.key] ?? f.name}
-                      {f.valueType === "Integer" && featureIncluded(f) && (
-                        <span className="text-gray-500 ml-1">
-                          ({f.integerValue === -1 ? "Απεριόριστο" : f.integerValue})
-                        </span>
-                      )}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-
-              {isActive ? (
-                <button
-                  disabled
-                  className="w-full py-2.5 rounded-lg bg-gray-100 text-gray-500 text-sm font-medium cursor-not-allowed"
-                >
-                  Τρέχον πακέτο
-                </button>
-              ) : (
-                <button
-                  onClick={() => handlePurchase(pkg.id)}
-                  disabled={!!purchasing || !!subscription}
-                  className={`w-full py-2.5 rounded-lg text-sm font-medium transition ${
-                    isPopular
-                      ? "bg-[#2E5A4C] text-white hover:bg-[#234a3d]"
-                      : "bg-gray-900 text-white hover:bg-gray-800"
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  {purchasing === pkg.id ? "Αγορά..." : "Επιλογή"}
-                </button>
-              )}
-            </div>
+              pkg={pkg}
+              isActive={isActive}
+              isPopular={isPopular}
+              purchasing={purchasing === pkg.id}
+              disabled={!!purchasing || (!!subscription && !isActive)}
+              onSelect={() => handlePurchase(pkg.id)}
+            />
           );
         })}
+      </section>
+
+      <section className="overflow-hidden rounded-xl border border-[#EDE8E3] bg-white">
+        <div className="border-b border-[#EDE8E3] px-6 py-5">
+          <h2 className="font-display text-xl text-[#1C1516]">Σύγκριση Χαρακτηριστικών</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-[640px] w-full text-sm">
+            <thead>
+              <tr className="border-b border-[#EDE8E3] bg-[#F9F8F6]">
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[#9C9293]">
+                  Χαρακτηριστικό
+                </th>
+                {packages.map((pkg) => (
+                  <th
+                    key={pkg.id}
+                    className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-[#9C9293]"
+                  >
+                    {pkg.displayName}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {COMPARISON_KEYS.map((key, rowIndex) => (
+                <tr
+                  key={key}
+                  className={`border-b border-[#EDE8E3] last:border-0 ${
+                    rowIndex % 2 === 1 ? "bg-[#F9F8F6]" : "bg-white"
+                  }`}
+                >
+                  <td className="px-6 py-3 font-medium text-[#1C1516]">
+                    {FEATURE_LABELS[key] ?? key}
+                  </td>
+                  {packages.map((pkg) => {
+                    const f = pkg.features.find((feat) => feat.key === key);
+                    return (
+                      <td key={pkg.id} className="px-4 py-3 text-center text-[#6E6263]">
+                        {formatComparisonValue(f, key, pkg.tier)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function PricingCard({
+  pkg,
+  isActive,
+  isPopular,
+  purchasing,
+  disabled,
+  onSelect,
+}: {
+  pkg: PackageInfo;
+  isActive: boolean;
+  isPopular: boolean;
+  purchasing: boolean;
+  disabled: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <article
+      className={`flex flex-col justify-between rounded-2xl bg-white p-7 ${
+        isPopular
+          ? "border-2 border-[#C4993D] shadow-[0_8px_12px_rgba(196,153,61,0.1)]"
+          : "border border-[#EDE8E3]"
+      }`}
+    >
+      <div className="space-y-6">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="font-display text-[28px] text-[#1C1516]">{pkg.displayName}</h2>
+          {isPopular ? (
+            <span className="shrink-0 rounded border border-[#C4993D] bg-[#FAF3DF] px-2.5 py-1 text-[10px] font-bold uppercase text-[#A87D2C]">
+              Δημοφιλές
+            </span>
+          ) : null}
+        </div>
+
+        <p className="text-[13px] leading-relaxed text-[#6E6263]">{pkg.description}</p>
+
+        <div className="flex items-baseline gap-1">
+          <span className="text-[40px] font-extrabold leading-none text-[#1C1516]">
+            {pkg.priceAmount}€
+          </span>
+          <span className="text-base text-[#9C9293]">/ εκδήλωση</span>
+        </div>
+
+        <div className="h-px bg-[#EDE8E3]" />
+
+        <ul className="space-y-2.5">
+          {CARD_FEATURE_KEYS.map((key) => {
+            const f = pkg.features.find((feat) => feat.key === key);
+            const included = featureIncluded(f);
+            const value = formatCardFeatureValue(f, key, pkg.tier);
+
+            return (
+              <li key={key} className="flex items-start gap-2 text-xs">
+                {included ? (
+                  <CheckIcon className="mt-0.5 shrink-0 text-[#C4993D]" />
+                ) : (
+                  <XIcon className="mt-0.5 shrink-0 text-[#CFC5BC]" />
+                )}
+                <span className="text-[#6E6263]">
+                  {FEATURE_LABELS[key]}:{" "}
+                  <span className="font-semibold text-[#1C1516]">{value}</span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
       </div>
 
-      {/* Feature Comparison Table */}
-      <h2 className="text-lg font-bold text-gray-900 mb-4">Σύγκριση Χαρακτηριστικών</h2>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b">
-              <th className="text-left py-3 px-4 font-medium text-gray-500">Χαρακτηριστικό</th>
-              {packages.map((pkg) => (
-                <th key={pkg.id} className="text-center py-3 px-4 font-semibold text-gray-900">
-                  {pkg.displayName}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {allFeatureKeys.map((key) => (
-              <tr key={key} className="border-b border-gray-100">
-                <td className="py-2.5 px-4 text-gray-700">
-                  {FEATURE_LABELS[key] ?? key}
-                </td>
-                {packages.map((pkg) => {
-                  const f = pkg.features.find((feat) => feat.key === key);
-                  return (
-                    <td key={pkg.id} className="text-center py-2.5 px-4">
-                      {f ? (
-                        <span
-                          className={featureIncluded(f) ? "text-gray-900" : "text-gray-400"}
-                        >
-                          {formatFeatureValue(f)}
-                        </span>
-                      ) : (
-                        <span className="text-gray-300">—</span>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="pt-6">
+        {isActive ? (
+          <button
+            type="button"
+            disabled
+            className="h-12 w-full cursor-not-allowed rounded-lg border border-[#EDE8E3] bg-[#F9F8F6] text-sm font-semibold text-[#9C9293]"
+          >
+            Τρέχον πακέτο
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onSelect}
+            disabled={disabled}
+            className={`h-12 w-full rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+              isPopular
+                ? "bg-[#C4993D] text-white shadow-[0_4px_6px_rgba(196,153,61,0.15)] hover:bg-[#B38935]"
+                : "border border-[#C4993D] bg-white text-[#C4993D] hover:bg-[#FAF3DF]"
+            }`}
+          >
+            {purchasing ? "Αγορά..." : "Επιλογή"}
+          </button>
+        )}
       </div>
-    </div>
+    </article>
+  );
+}
+
+function ArrowLeftIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-3.5 shrink-0" fill="none" aria-hidden>
+      <path
+        d="M19 12H5M5 12l6-6M5 12l6 6"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={`size-3.5 ${className ?? ""}`} fill="none" aria-hidden>
+      <path
+        d="M20 6 9 17l-5-5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={`size-3.5 ${className ?? ""}`} fill="none" aria-hidden>
+      <path
+        d="M18 6 6 18M6 6l12 12"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }

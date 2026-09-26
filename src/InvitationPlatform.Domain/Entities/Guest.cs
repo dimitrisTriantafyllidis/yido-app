@@ -1,4 +1,5 @@
 using InvitationPlatform.Domain.Common;
+using InvitationPlatform.Domain.Enums;
 
 namespace InvitationPlatform.Domain.Entities;
 
@@ -18,10 +19,22 @@ public class Guest : BaseEntity, ITenantEntity, ISoftDeletable
     public string? Notes { get; set; }
     /// <summary>Unique token for personalized invitation link (/e/{slug}?t=...).</summary>
     public string InviteToken { get; set; } = Guid.NewGuid().ToString("N");
+    
+    /// <summary>When the invitation link was last sent to this guest.</summary>
+    public DateTime? InvitationSentAt { get; set; }
+    /// <summary>How the invitation was sent (Email, SMS, or Manual).</summary>
+    public SentVia? InvitationSentVia { get; set; }
+    
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }
 
+    /// <summary>Assigned reception table (seating plan).</summary>
+    public Guid? EventTableId { get; set; }
+    /// <summary>Seat index around the table (0-based).</summary>
+    public int? SeatIndex { get; set; }
+
     public Event Event { get; set; } = null!;
     public GuestGroup? GuestGroup { get; set; }
+    public EventTable? EventTable { get; set; }
     public ICollection<Rsvp> Rsvps { get; set; } = [];
 }

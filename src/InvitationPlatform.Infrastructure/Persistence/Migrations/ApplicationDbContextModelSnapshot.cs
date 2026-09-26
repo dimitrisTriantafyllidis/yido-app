@@ -17,7 +17,7 @@ namespace InvitationPlatform.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.19")
+                .HasAnnotation("ProductVersion", "9.0.20")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -284,6 +284,51 @@ namespace InvitationPlatform.Infrastructure.Persistence.Migrations
                     b.ToTable("EventPersons", (string)null);
                 });
 
+            modelBuilder.Entity("InvitationPlatform.Domain.Entities.EventTable", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasDefaultValueSql("NEWSEQUENTIALID()");
+
+                    b.Property<int>("Capacity")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CategoryLabel")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId", "SortOrder");
+
+                    b.HasIndex("TenantId", "EventId");
+
+                    b.ToTable("EventTables", (string)null);
+                });
+
             modelBuilder.Entity("InvitationPlatform.Domain.Entities.Feature", b =>
                 {
                     b.Property<Guid>("Id")
@@ -354,6 +399,9 @@ namespace InvitationPlatform.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("EventId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("EventTableId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("FirstName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -361,6 +409,12 @@ namespace InvitationPlatform.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("GuestGroupId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("InvitationSentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<byte?>("InvitationSentVia")
+                        .HasColumnType("tinyint");
 
                     b.Property<string>("InviteToken")
                         .IsRequired()
@@ -389,6 +443,9 @@ namespace InvitationPlatform.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<int?>("SeatIndex")
+                        .HasColumnType("int");
+
                     b.Property<string>("Tags")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -402,6 +459,8 @@ namespace InvitationPlatform.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("EventId");
+
+                    b.HasIndex("EventTableId");
 
                     b.HasIndex("GuestGroupId");
 
@@ -454,6 +513,46 @@ namespace InvitationPlatform.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "EventId");
 
                     b.ToTable("GuestGroups", (string)null);
+                });
+
+            modelBuilder.Entity("InvitationPlatform.Domain.Entities.GuestWish", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasDefaultValueSql("NEWSEQUENTIALID()");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("GuestName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId");
+
+                    b.HasIndex("TenantId", "EventId", "CreatedAt");
+
+                    b.ToTable("GuestWishes", (string)null);
                 });
 
             modelBuilder.Entity("InvitationPlatform.Domain.Entities.InvitationSection", b =>
@@ -1702,6 +1801,17 @@ namespace InvitationPlatform.Infrastructure.Persistence.Migrations
                     b.Navigation("Event");
                 });
 
+            modelBuilder.Entity("InvitationPlatform.Domain.Entities.EventTable", b =>
+                {
+                    b.HasOne("InvitationPlatform.Domain.Entities.Event", "Event")
+                        .WithMany("Tables")
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Event");
+                });
+
             modelBuilder.Entity("InvitationPlatform.Domain.Entities.Guest", b =>
                 {
                     b.HasOne("InvitationPlatform.Domain.Entities.Event", "Event")
@@ -1710,12 +1820,19 @@ namespace InvitationPlatform.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("InvitationPlatform.Domain.Entities.EventTable", "EventTable")
+                        .WithMany("Guests")
+                        .HasForeignKey("EventTableId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("InvitationPlatform.Domain.Entities.GuestGroup", "GuestGroup")
                         .WithMany("Guests")
                         .HasForeignKey("GuestGroupId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Event");
+
+                    b.Navigation("EventTable");
 
                     b.Navigation("GuestGroup");
                 });
@@ -1726,6 +1843,17 @@ namespace InvitationPlatform.Infrastructure.Persistence.Migrations
                         .WithMany("GuestGroups")
                         .HasForeignKey("EventId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Event");
+                });
+
+            modelBuilder.Entity("InvitationPlatform.Domain.Entities.GuestWish", b =>
+                {
+                    b.HasOne("InvitationPlatform.Domain.Entities.Event", "Event")
+                        .WithMany("Wishes")
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Event");
@@ -2031,7 +2159,16 @@ namespace InvitationPlatform.Infrastructure.Persistence.Migrations
 
                     b.Navigation("Rsvps");
 
+                    b.Navigation("Tables");
+
                     b.Navigation("Venues");
+
+                    b.Navigation("Wishes");
+                });
+
+            modelBuilder.Entity("InvitationPlatform.Domain.Entities.EventTable", b =>
+                {
+                    b.Navigation("Guests");
                 });
 
             modelBuilder.Entity("InvitationPlatform.Domain.Entities.Guest", b =>

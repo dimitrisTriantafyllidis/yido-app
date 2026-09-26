@@ -120,14 +120,44 @@ public class RsvpsController(ApplicationDbContext db, ITenantContext tenantConte
 
 [ApiController]
 [Route("api/v1/public")]
+[AllowAnonymous]
 [EnableRateLimiting("public-rsvp")]
-public class PublicRsvpController(ApplicationDbContext db) : ControllerBase
+public class PublicRsvpController(ApplicationDbContext db, Infrastructure.Services.ITurnstileService turnstile) : ControllerBase
 {
     [HttpPost("rsvp")]
     public async Task<IActionResult> SubmitRsvp([FromBody] PublicRsvpRequest request)
     {
+        // Verify Turnstile CAPTCHA (if enabled)
+        if (turnstile.IsEnabled)
+        {
+            if (string.IsNullOrWhiteSpace(request.TurnstileToken))
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "CAPTCHA verification required",
+                    Detail = "Please complete the CAPTCHA challenge.",
+                    Status = StatusCodes.Status400BadRequest
+                });
+            }
+
+            var (success, errorCode) = await turnstile.VerifyAsync(
+                request.TurnstileToken,
+                HttpContext.Connection.RemoteIpAddress?.ToString());
+
+            if (!success)
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "CAPTCHA verification failed",
+                    Detail = $"Please try again. Error: {errorCode}",
+                    Status = StatusCodes.Status400BadRequest
+                });
+            }
+        }
+
         var evt = await db.Events
-            .Where(e => e.Slug == request.EventSlug && e.Status == EventStatus.Published)
+            .IgnoreQueryFilters()
+            .Where(e => e.Slug == request.EventSlug && e.Status == EventStatus.Published && !e.IsDeleted)
             .FirstOrDefaultAsync();
 
         if (evt is null)
@@ -140,11 +170,14 @@ public class PublicRsvpController(ApplicationDbContext db) : ControllerBase
         if (!string.IsNullOrWhiteSpace(request.InviteToken))
         {
             var guest = await db.Guests
-                .FirstOrDefaultAsync(g => g.EventId == evt.Id && g.InviteToken == request.InviteToken);
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(g => g.EventId == evt.Id && g.InviteToken == request.InviteToken && !g.IsDeleted);
             if (guest is null)
                 return BadRequest(new ProblemDetails { Title = "Invalid invite token." });
 
-            var already = await db.Rsvps.AnyAsync(r => r.EventId == evt.Id && r.GuestId == guest.Id);
+            var already = await db.Rsvps
+                .IgnoreQueryFilters()
+                .AnyAsync(r => r.EventId == evt.Id && r.GuestId == guest.Id);
             if (already)
                 return Conflict(new ProblemDetails { Title = "This guest has already submitted an RSVP." });
 
@@ -184,6 +217,7 @@ public class PublicRsvpController(ApplicationDbContext db) : ControllerBase
         {
             var questionIds = request.Answers.Select(a => a.QuestionId).Distinct().ToList();
             var validQuestions = await db.RsvpQuestions
+                .IgnoreQueryFilters()
                 .Where(q => q.EventId == evt.Id && questionIds.Contains(q.Id))
                 .Select(q => q.Id)
                 .ToListAsync();
@@ -227,6 +261,7 @@ public class PublicRsvpController(ApplicationDbContext db) : ControllerBase
     public async Task<IActionResult> UpdateRsvp(string updateToken, [FromBody] PublicRsvpUpdateRequest request)
     {
         var rsvp = await db.Rsvps
+            .IgnoreQueryFilters()
             .Include(r => r.Answers)
             .FirstOrDefaultAsync(r => r.UpdateToken == updateToken);
 
@@ -301,7 +336,8 @@ public record PublicRsvpRequest(
     string? MealPreference = null,
     string? DietaryNotes = null,
     string? Notes = null,
-    List<PublicRsvpAnswerDto>? Answers = null
+    List<PublicRsvpAnswerDto>? Answers = null,
+    string? TurnstileToken = null
 );
 
 public record PublicRsvpUpdateRequest(
