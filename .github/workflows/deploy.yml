@@ -188,8 +188,28 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      - name: Pin SDK and restore
+        run: |
+          dotnet new globaljson --sdk-version 9.0.0 --roll-forward latestFeature --force
+          dotnet restore src/InvitationPlatform.Api/InvitationPlatform.Api.csproj
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Allow runner SQL access
+        run: |
+          IP=$(curl -4 -s https://api.ipify.org)
+          az sql server firewall-rule create \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --server sql-yido-staging \
+            --name "github-actions-${{ github.run_id }}" \
+            --start-ip-address "$IP" \
+            --end-ip-address "$IP"
+
       - name: Install EF Core Tools
-        run: dotnet tool install --global dotnet-ef
+        run: dotnet tool install --global dotnet-ef --version 9.*
 
       - name: Run Migrations
         run: |
@@ -197,3 +217,12 @@ jobs:
             --project src/InvitationPlatform.Infrastructure \
             --startup-project src/InvitationPlatform.Api \
             --connection "${{ secrets.SQL_CONNECTION_STRING }}"
+
+      - name: Remove runner SQL access
+        if: always()
+        run: |
+          az sql server firewall-rule delete \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --server sql-yido-staging \
+            --name "github-actions-${{ github.run_id }}" \
+            --yes
