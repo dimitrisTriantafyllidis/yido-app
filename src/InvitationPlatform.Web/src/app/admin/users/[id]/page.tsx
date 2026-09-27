@@ -198,14 +198,15 @@ export default function AdminUserDetailPage() {
         </section>
       </div>
 
-      <section className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-200">
+      <section className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+        <div className="border-b border-gray-200 px-4 py-3">
           <h2 className="text-sm font-semibold text-gray-900">Συνδεδεμένοι tenants</h2>
         </div>
         {user.tenants.length === 0 ? (
           <p className="px-4 py-6 text-sm text-gray-400">Κανένας tenant</p>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[520px] text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Όνομα</th>
@@ -236,6 +237,7 @@ export default function AdminUserDetailPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </section>
     </div>

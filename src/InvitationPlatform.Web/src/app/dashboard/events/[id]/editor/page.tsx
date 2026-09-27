@@ -20,6 +20,7 @@ import {
   type QuizQuestionConfig,
   type VendorConfig,
 } from "@/components/invitations/extra-section-config";
+import { TemplatePreviewImage } from "@/components/templates/template-preview";
 import { api } from "@/lib/api";
 
 interface ThemeData {
@@ -268,7 +269,7 @@ export default function EditorPage() {
   // Template selection screen
   if (needsTemplate) {
     return (
-      <main className="flex flex-col gap-8 px-6 py-10 pb-12 md:px-12">
+      <main className="flex flex-col gap-8 px-4 py-8 pb-12 sm:px-6 md:px-12 md:py-10">
         <Link
           href={`/dashboard/events/${eventId}`}
           className="inline-flex items-center gap-2 text-sm font-medium text-[#C4993D] hover:text-[#A87D2C]"
@@ -277,34 +278,28 @@ export default function EditorPage() {
           Πίσω στην εκδήλωση
         </Link>
         <div>
-          <h1 className="font-display text-[32px] text-[#1C1516]">Επιλέξτε πρότυπο</h1>
+          <h1 className="font-display text-[28px] text-[#1C1516] sm:text-[32px]">Επιλέξτε πρότυπο</h1>
           <p className="mt-1 text-sm text-[#6E6263]">
             Διαλέξτε ένα πρότυπο για την πρόσκλησή σας
           </p>
         </div>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {templates.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => selectTemplate(t.id)}
-              className="cursor-pointer rounded-xl border border-[#EDE8E3] bg-white p-6 text-left transition-all hover:border-[#C4993D]/40 hover:shadow-sm"
+              className="cursor-pointer rounded-xl border border-[#EDE8E3] bg-white p-4 text-left transition-all hover:border-[#C4993D]/40 hover:shadow-sm sm:p-6"
             >
-              <div className="mb-4 flex h-40 w-full items-center justify-center overflow-hidden rounded-lg bg-[#F9F8F6]">
-                {t.previewImageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={t.previewImageUrl}
-                    alt=""
-                    className="h-full w-full object-cover object-center"
-                  />
-                ) : (
-                  <span className="text-sm font-medium text-[#C4993D]">Προεπισκόπηση</span>
-                )}
-              </div>
+              <TemplatePreviewImage
+                category={t.category}
+                name={t.name}
+                remoteUrl={t.previewImageUrl}
+                className="mb-4 h-40 w-full rounded-lg"
+              />
               <h3 className="font-display text-lg text-[#1C1516]">{t.name}</h3>
               <p className="mt-1 text-sm text-[#6E6263]">{t.description}</p>
-              <div className="mt-3 flex gap-3 text-xs text-[#9C9293]">
+              <div className="mt-3 flex flex-wrap gap-3 text-xs text-[#9C9293]">
                 <span>{EVENT_TYPE_LABELS[t.eventType] ?? t.eventType}</span>
                 <span>{t.sectionCount} ενότητες</span>
               </div>
@@ -359,17 +354,17 @@ export default function EditorPage() {
   );
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#F9F8F6]">
-      <header className="flex shrink-0 items-center justify-between border-b border-[#EDE8E3] bg-white px-8 py-4">
-        <div className="flex items-center gap-3">
+    <div className="flex h-[calc(100dvh-3.5rem)] flex-col overflow-hidden bg-[#F9F8F6] lg:h-dvh">
+      <header className="flex shrink-0 flex-col gap-3 border-b border-[#EDE8E3] bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between md:px-8 md:py-4">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <Link
             href={`/dashboard/events/${eventId}`}
             className="text-sm font-medium text-[#9C9293] transition-colors hover:text-[#1C1516]"
           >
             ← Πίσω
           </Link>
-          <span className="h-4 w-px bg-[#EDE8E3]" aria-hidden />
-          <h1 className="font-display text-xl text-[#1C1516]">
+          <span className="hidden h-4 w-px bg-[#EDE8E3] sm:block" aria-hidden />
+          <h1 className="truncate font-display text-lg text-[#1C1516] sm:text-xl">
             {invitation.template.name}
           </h1>
           <span
@@ -395,14 +390,14 @@ export default function EditorPage() {
           ) : null}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {publishedSlug ? (
             <Link
               href={`/e/${publishedSlug}`}
               target="_blank"
-              className="rounded-md border border-[#EDE8E3] px-4 py-2 text-[13px] font-semibold text-[#6E6263] transition-colors hover:text-[#1C1516]"
+              className="rounded-md border border-[#EDE8E3] px-3 py-2 text-[13px] font-semibold text-[#6E6263] transition-colors hover:text-[#1C1516] sm:px-4"
             >
-              Άνοιγμα πρόσκλησης
+              Άνοιγμα
             </Link>
           ) : null}
           {!invitation.isPublished ? (
@@ -425,8 +420,8 @@ export default function EditorPage() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <aside className="flex w-[240px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-[#EDE8E3] bg-white p-6">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+        <aside className="flex max-h-[42vh] w-full shrink-0 flex-col gap-5 overflow-y-auto border-b border-[#EDE8E3] bg-white p-4 lg:max-h-none lg:w-[240px] lg:border-b-0 lg:border-r lg:p-6">
           <p className="text-xs font-bold uppercase tracking-wide text-[#9C9293]">
             Ενότητες πρόσκλησης
           </p>
@@ -555,7 +550,7 @@ export default function EditorPage() {
           </div>
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col items-center overflow-y-auto px-6 pb-12 pt-8">
+        <div className="flex min-w-0 flex-1 flex-col items-center overflow-y-auto px-4 pb-12 pt-6 md:px-6 md:pt-8">
           <div className="mb-5 flex rounded-lg bg-[#EDE8E3] p-0.5">
             <button
               type="button"

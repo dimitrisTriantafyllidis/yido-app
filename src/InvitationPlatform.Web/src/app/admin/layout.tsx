@@ -38,17 +38,17 @@ export default function AdminLayout({
       {isDashboard ? (
         children
       ) : (
-        <main className="px-6 pb-12 md:px-12">
-          <div className="mb-8 flex items-center justify-between gap-4 border-b border-[#EDE8E3] pb-6">
+        <main className="px-4 pb-12 sm:px-6 md:px-12">
+          <div className="mb-8 flex flex-col gap-3 border-b border-[#EDE8E3] pb-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
-              <Link href="/admin" className="font-display text-2xl text-[#1C1516] hover:text-[#C4993D]">
+              <Link href="/admin" className="font-display text-xl text-[#1C1516] hover:text-[#C4993D] sm:text-2xl">
                 YIDO Admin
               </Link>
               <span className="rounded bg-[#FAF3DF] px-1.5 py-0.5 text-[10px] font-bold uppercase text-[#A87D2C]">
                 System
               </span>
             </div>
-            <div className="flex items-center gap-4 text-sm">
+            <div className="flex flex-wrap items-center gap-4 text-sm">
               <Link href="/dashboard" className="font-medium text-[#C4993D] hover:underline">
                 Portal Πελατών
               </Link>

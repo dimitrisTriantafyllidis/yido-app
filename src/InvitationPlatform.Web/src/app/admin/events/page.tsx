@@ -70,7 +70,7 @@ export default function AdminEventsPage() {
           placeholder="Αναζήτηση..."
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="px-3 py-2 text-sm border border-gray-200 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-[#2E5A4C]/20 focus:border-[#2E5A4C]"
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#2E5A4C] focus:outline-none focus:ring-2 focus:ring-[#2E5A4C]/20 sm:w-64"
         />
         <select
           value={statusFilter}
@@ -101,8 +101,8 @@ export default function AdminEventsPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+        <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-500">Τίτλος</th>

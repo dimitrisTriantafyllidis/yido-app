@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
@@ -11,14 +14,14 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Ρυθμίσεις", icon: "settings" as const, disabled: true },
 ] as const;
 
-export function DashboardSidebar() {
+export function DashboardSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const tenantName = user?.currentTenant?.name ?? "YIDO";
   const initials = `${user?.firstName?.charAt(0) ?? ""}${user?.lastName?.charAt(0) ?? ""}` || "Y";
 
   return (
-    <aside className="flex w-[260px] shrink-0 flex-col justify-between self-stretch border-r border-white/[0.04] bg-[#3A1112] px-4 py-6">
+    <aside className="flex h-full w-[260px] shrink-0 flex-col justify-between border-r border-white/[0.04] bg-[#3A1112] px-4 py-6">
       <div className="flex flex-col gap-8">
         <Link href="/" className="flex items-center gap-2 pl-3">
           <span className="font-display text-[32px] leading-none text-white">YIDO</span>
@@ -63,6 +66,7 @@ export function DashboardSidebar() {
               <Link
                 key={item.label}
                 href={item.href}
+                onClick={onNavigate}
                 className={`flex items-center gap-3 rounded-lg px-3.5 py-2.5 text-sm transition-colors ${
                   active
                     ? "border border-white/[0.08] bg-white/[0.06] font-semibold text-white"
@@ -96,6 +100,7 @@ export function DashboardSidebar() {
         {user?.isSystemAdmin ? (
           <Link
             href="/admin"
+            onClick={onNavigate}
             className="mt-3 block rounded-md border border-white/10 px-2 py-1.5 text-center text-[11px] font-medium text-[#A38B8E] hover:bg-white/5 hover:text-white"
           >
             Admin portal
@@ -107,9 +112,48 @@ export function DashboardSidebar() {
 }
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
   return (
-    <div className="dashboard flex min-h-screen bg-[#F9F8F6] text-[#1C1516]">
-      <DashboardSidebar />
+    <div className="dashboard flex min-h-dvh flex-col bg-[#F9F8F6] text-[#1C1516] lg:flex-row">
+      <header className="sticky top-0 z-40 flex h-14 items-center justify-between bg-[#3A1112] px-4 lg:hidden">
+        <Link href="/" className="font-display text-2xl leading-none text-white">
+          YIDO
+        </Link>
+        <button
+          type="button"
+          className="inline-flex size-10 items-center justify-center rounded-lg border border-white/15 text-white"
+          aria-expanded={open}
+          aria-label={open ? "Κλείσιμο μενού" : "Άνοιγμα μενού"}
+          onClick={() => setOpen((value) => !value)}
+        >
+          <span className="relative block h-3.5 w-4">
+            <span className={`absolute left-0 top-0 h-px w-4 bg-current transition ${open ? "top-1.5 rotate-45" : ""}`} />
+            <span className={`absolute left-0 top-1.5 h-px w-4 bg-current ${open ? "opacity-0" : ""}`} />
+            <span className={`absolute bottom-0 left-0 h-px w-4 bg-current transition ${open ? "top-1.5 -rotate-45" : ""}`} />
+          </span>
+        </button>
+      </header>
+      {open ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          aria-label="Κλείσιμο μενού"
+          onClick={() => setOpen(false)}
+        />
+      ) : null}
+      <div
+        className={`fixed inset-y-0 left-0 z-50 transition-transform duration-200 lg:static lg:translate-x-0 ${
+          open ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <DashboardSidebar onNavigate={() => setOpen(false)} />
+      </div>
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   );

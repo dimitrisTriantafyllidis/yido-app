@@ -253,7 +253,7 @@ export default function EventDetailPage() {
   const publicUrl = slug ? `${PUBLIC_BASE.replace(/\/$/, "")}/e/${slug}` : null;
 
   return (
-    <main className="flex flex-col gap-8 px-6 py-10 md:px-12">
+    <main className="flex flex-col gap-8 px-4 py-8 sm:px-6 md:px-12 md:py-10">
       <section className="flex flex-col gap-4">
         <nav className="flex items-center gap-2 text-[13px]">
           <Link href="/dashboard" className="font-medium text-[#9C9293] hover:text-[#1C1516]">
@@ -265,7 +265,7 @@ export default function EventDetailPage() {
 
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-wrap items-center gap-4">
-            <h1 className="font-display text-4xl text-[#1C1516]">{event.title}</h1>
+            <h1 className="font-display text-2xl text-[#1C1516] sm:text-4xl">{event.title}</h1>
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${status.pill} ${status.text}`}
             >

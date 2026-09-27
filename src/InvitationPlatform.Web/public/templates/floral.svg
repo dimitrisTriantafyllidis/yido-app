@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="700" viewBox="0 0 900 700">
+  <rect width="900" height="700" fill="#4A1221"/>
+  <rect x="40" y="40" width="820" height="620" fill="none" stroke="#C39C5E" stroke-width="2" opacity="0.55"/>
+  <text x="450" y="300" text-anchor="middle" fill="#E8C4C8" font-family="Georgia, serif" font-size="14" letter-spacing="10">YIDO</text>
+  <text x="450" y="380" text-anchor="middle" fill="#FBF9F4" font-family="Georgia, serif" font-size="48">Floral</text>
+  <line x1="400" y1="410" x2="500" y2="410" stroke="#C39C5E" stroke-width="1.5"/>
+  <text x="450" y="450" text-anchor="middle" fill="#E8C4C8" font-family="Georgia, serif" font-size="14" letter-spacing="6">INVITATION</text>
+</svg>

@@ -41,7 +41,7 @@ export default function LoginPage() {
     "h-12 w-full rounded-lg border border-[#EADFCB] bg-[#FBF9F4] px-4 text-sm text-[#1F0F12] placeholder:text-[#6E5B60] outline-none focus:border-[#4A1221] focus:ring-1 focus:ring-[#4A1221]";
 
   return (
-    <div className="w-full max-w-[460px] rounded-2xl border border-[#EADFCB] bg-white p-10 shadow-[0_8px_16px_rgba(31,15,18,0.05)]">
+    <div className="w-full max-w-[460px] rounded-2xl border border-[#EADFCB] bg-white p-6 shadow-[0_8px_16px_rgba(31,15,18,0.05)] sm:p-10">
       <div className="mb-8 flex flex-col items-center gap-4 text-center">
         <LandingLogo href="/" size="lg" />
         <div className="space-y-1.5">

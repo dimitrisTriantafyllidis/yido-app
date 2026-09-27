@@ -159,7 +159,7 @@ export default function RsvpsPage() {
   };
 
   return (
-    <main className="flex flex-col gap-8 px-6 py-10 pb-12 md:px-12">
+    <main className="flex flex-col gap-8 px-4 py-8 pb-12 sm:px-6 md:px-12 md:py-10">
       <section className="flex flex-col gap-1.5">
         <nav className="flex flex-wrap items-center gap-1 text-xs">
           <Link href="/dashboard" className="text-[#6E5B5D] hover:text-[#1C1516]">

@@ -66,7 +66,7 @@ export default function AdminOrdersPage() {
       <h1 className="text-xl font-bold text-gray-900 mb-6">Παραγγελίες</h1>
 
       {/* Filters */}
-      <div className="flex gap-3 mb-4">
+      <div className="mb-4 flex flex-wrap gap-3">
         <select
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
@@ -86,8 +86,8 @@ export default function AdminOrdersPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+        <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-500">ID</th>

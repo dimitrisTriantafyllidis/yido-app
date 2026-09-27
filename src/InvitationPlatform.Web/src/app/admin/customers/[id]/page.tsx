@@ -120,8 +120,8 @@ export default function AdminCustomerDetailPage() {
       {/* Users */}
       <section className="mb-6">
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Χρήστες</h2>
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+          <table className="w-full min-w-[560px] text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="text-left px-4 py-2 font-medium text-gray-500">Όνομα</th>
@@ -159,8 +159,8 @@ export default function AdminCustomerDetailPage() {
         <h2 className="text-sm font-semibold text-gray-700 mb-3">
           Εκδηλώσεις ({customer.events.length})
         </h2>
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+          <table className="w-full min-w-[560px] text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="text-left px-4 py-2 font-medium text-gray-500">Τίτλος</th>
@@ -210,8 +210,8 @@ export default function AdminCustomerDetailPage() {
         <h2 className="text-sm font-semibold text-gray-700 mb-3">
           Συνδρομές ({customer.subscriptions.length})
         </h2>
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+          <table className="w-full min-w-[560px] text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="text-left px-4 py-2 font-medium text-gray-500">Πακέτο</th>

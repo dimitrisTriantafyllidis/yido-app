@@ -186,7 +186,7 @@ export default function PricingPage() {
   }
 
   return (
-    <main className="flex flex-col gap-8 px-6 py-10 pb-12 md:px-12">
+    <main className="flex flex-col gap-8 px-4 py-8 pb-12 sm:px-6 md:px-12 md:py-10">
       <section className="flex flex-col gap-3">
         <Link
           href={`/dashboard/events/${eventId}`}

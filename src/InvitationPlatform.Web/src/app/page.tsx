@@ -325,7 +325,7 @@ function PricingCard({
 }) {
   return (
     <article
-      className={`relative flex flex-col gap-8 rounded-3xl bg-white p-10 ${
+      className={`relative flex flex-col gap-8 rounded-3xl bg-white p-6 sm:p-10 ${
         featured
           ? "border-2 border-[#4A1221] shadow-[0_16px_16px_rgba(74,18,33,0.1)]"
           : "border border-[#EADFCB]"

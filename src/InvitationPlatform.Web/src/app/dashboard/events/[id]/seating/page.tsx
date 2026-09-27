@@ -236,7 +236,7 @@ export function SeatingPlanner({ eventId }: { eventId: string }) {
   if (forbidden) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-[#F9F8F6]">
-        <header className="flex h-[72px] items-center justify-between border-b border-white/[0.04] bg-[#3A1112] px-6">
+        <header className="flex min-h-[56px] items-center justify-between border-b border-white/[0.04] bg-[#3A1112] px-4 py-3 md:min-h-[72px] md:px-6">
           <Link href="/dashboard" className="flex items-center gap-2">
             <span className="font-display text-[32px] text-white">YIDO</span>
             <span className="size-1.5 rounded-[3px] bg-[#C4993D]" />
@@ -272,7 +272,7 @@ export function SeatingPlanner({ eventId }: { eventId: string }) {
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#F9F8F6]">
       {/* Top nav — Figma 53:4 */}
-      <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-white/[0.04] bg-[#3A1112] px-6">
+      <header className="flex min-h-[56px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/[0.04] bg-[#3A1112] px-4 py-3 md:min-h-[72px] md:px-6">
         <div className="flex min-w-0 items-center gap-5">
           <Link href="/dashboard" className="flex shrink-0 items-center gap-2">
             <span className="font-display text-[32px] leading-none text-white">YIDO</span>

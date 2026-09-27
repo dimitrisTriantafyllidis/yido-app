@@ -750,9 +750,9 @@ export function WeddingTemplateEditor({
   };
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#F9F8F6]">
-      <header className="flex shrink-0 items-center justify-between border-b border-[#EDE8E3] bg-white px-6 py-4 md:px-8">
-        <div className="flex min-w-0 items-center gap-3">
+    <div className="flex h-[calc(100dvh-3.5rem)] flex-col overflow-hidden bg-[#F9F8F6] lg:h-dvh">
+      <header className="flex shrink-0 flex-col gap-3 border-b border-[#EDE8E3] bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between md:px-8 md:py-4">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <Link
             href={`/dashboard/events/${eventId}`}
             className="shrink-0 text-sm font-medium text-[#9C9293] transition-colors hover:text-[#1C1516]"
@@ -815,8 +815,8 @@ export function WeddingTemplateEditor({
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <aside className="flex w-full max-w-[420px] shrink-0 flex-col overflow-y-auto border-r border-[#EDE8E3] bg-white p-6">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+        <aside className="flex max-h-[42vh] w-full shrink-0 flex-col overflow-y-auto border-b border-[#EDE8E3] bg-white p-4 lg:max-h-none lg:max-w-[420px] lg:border-b-0 lg:border-r lg:p-6">
           <p className="mb-5 text-xs font-bold uppercase tracking-wide text-[#9C9293]">
             Περιεχόμενο προτύπου
           </p>

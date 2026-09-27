@@ -150,10 +150,10 @@ export default function DashboardPage() {
   const firstName = user?.firstName ?? "χρήστη";
 
   return (
-    <main className="flex flex-col gap-8 px-6 py-10 md:px-12">
+    <main className="flex flex-col gap-8 px-4 py-8 sm:px-6 md:px-12 md:py-10">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-[28px] font-bold text-[#1C1516]">Καλώς ήρθες, {firstName}</h1>
+          <h1 className="text-2xl font-bold text-[#1C1516] sm:text-[28px]">Καλώς ήρθες, {firstName}</h1>
           <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-[#6E6263]">
             <span>
               Διαχειριστής: <span className="font-semibold text-[#1C1516]">{tenantName}</span>
@@ -537,7 +537,7 @@ function CreateEventModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <div className="w-full max-w-lg rounded-2xl border border-[#EDE8E3] bg-white p-8 shadow-lg">
+      <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[#EDE8E3] bg-white p-5 shadow-lg sm:p-8">
         <div className="mb-6 flex items-center justify-between">
           <h2 className="font-display text-xl font-semibold text-[#1C1516]">Νέα εκδήλωση</h2>
           <button

@@ -172,7 +172,7 @@ export default function GuestsPage() {
     : null;
 
   return (
-    <main className="flex flex-col gap-8 px-6 py-10 pb-12 md:px-12">
+    <main className="flex flex-col gap-8 px-4 py-8 pb-12 sm:px-6 md:px-12 md:py-10">
       <section className="flex flex-col gap-3">
         <nav className="flex items-center gap-2 text-xs">
           <Link href="/dashboard" className="font-medium text-[#9C9293] hover:text-[#1C1516]">

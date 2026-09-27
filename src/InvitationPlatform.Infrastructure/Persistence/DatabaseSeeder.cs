@@ -275,16 +275,16 @@ public static class DatabaseSeeder
             // Seed wedding style templates (Classic Greek Make designs)
             var weddingStyles = new (Guid id, string category, string name, string description, int sort, string? preview)[]
             {
-                (Guid.Parse("00000000-0000-0000-0000-000000000210"), "rustic", "Ρουστίκ", "Φυσικά υλικά, ξύλο & γήινα χρώματα", 0, "https://images.unsplash.com/photo-1519741497674-611481863552?w=900&h=700&fit=crop"),
-                (Guid.Parse("00000000-0000-0000-0000-000000000211"), "boho", "Boho Chic", "Αέρινα υφάσματα, pampas & ελεύθερο πνεύμα", 1, "https://images.unsplash.com/photo-1522673607200-164d1b6ce486?w=900&h=700&fit=crop"),
-                (Guid.Parse("00000000-0000-0000-0000-000000000212"), "minimal", "Minimal Chic", "Καθαρές γραμμές, λευκό & λιτή κομψότητα", 2, "https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?w=900&h=700&fit=crop"),
-                (Guid.Parse("00000000-0000-0000-0000-000000000213"), "vintage", "Vintage", "Δαντέλες, παστέλ & ρομαντική νοσταλγία", 3, "https://images.unsplash.com/photo-1556337137-c7de215dfa78?w=900&h=700&fit=crop"),
-                (Guid.Parse("00000000-0000-0000-0000-000000000214"), "elegant", "Κλασικό Elegant", "Μεγαλοπρεπής δεξίωση & επίσημο στυλ", 4, "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=900&h=700&fit=crop"),
-                (Guid.Parse("00000000-0000-0000-0000-000000000215"), "floral", "Floral Romance", "Τριαντάφυλλα, μπορντό & ρομαντικό script", 5, "https://images.unsplash.com/photo-1520854221256-1744189951c6?w=900&h=700&fit=crop"),
-                (Guid.Parse("00000000-0000-0000-0000-000000000216"), "wreath", "Botanical Wreath", "Χρυσό στεφάνι & πράσινα φύλλα", 6, "https://images.unsplash.com/photo-1460978812857-470ed1c77af0?w=900&h=700&fit=crop"),
-                (Guid.Parse("00000000-0000-0000-0000-000000000217"), "dusty", "Dusty Blue", "Απαλό μπλε & ροζ υδατογραφία", 7, "https://images.unsplash.com/photo-1529636798458-92182e662485?w=900&h=700&fit=crop"),
-                (Guid.Parse("00000000-0000-0000-0000-000000000218"), "greengold", "Green & Gold", "Editorial Save the Date, πράσινο & χρυσό", 8, "https://images.unsplash.com/photo-1511285560929-80b456fe9cab?w=900&h=700&fit=crop"),
-                (Guid.Parse("00000000-0000-0000-0000-000000000219"), "geometric", "Geometric Floral", "Γεωμετρικό πλαίσιο & peony", 9, "https://images.unsplash.com/photo-1606216794074-735e91aa2c92?w=900&h=700&fit=crop"),
+                (Guid.Parse("00000000-0000-0000-0000-000000000210"), "rustic", "Ρουστίκ", "Φυσικά υλικά, ξύλο & γήινα χρώματα", 0, "/templates/rustic.svg"),
+                (Guid.Parse("00000000-0000-0000-0000-000000000211"), "boho", "Boho Chic", "Αέρινα υφάσματα, pampas & ελεύθερο πνεύμα", 1, "/templates/boho.svg"),
+                (Guid.Parse("00000000-0000-0000-0000-000000000212"), "minimal", "Minimal Chic", "Καθαρές γραμμές, λευκό & λιτή κομψότητα", 2, "/templates/minimal.svg"),
+                (Guid.Parse("00000000-0000-0000-0000-000000000213"), "vintage", "Vintage", "Δαντέλες, παστέλ & ρομαντική νοσταλγία", 3, "/templates/vintage.svg"),
+                (Guid.Parse("00000000-0000-0000-0000-000000000214"), "elegant", "Κλασικό Elegant", "Μεγαλοπρεπής δεξίωση & επίσημο στυλ", 4, "/templates/elegant.svg"),
+                (Guid.Parse("00000000-0000-0000-0000-000000000215"), "floral", "Floral Romance", "Τριαντάφυλλα, μπορντό & ρομαντικό script", 5, "/templates/floral.svg"),
+                (Guid.Parse("00000000-0000-0000-0000-000000000216"), "wreath", "Botanical Wreath", "Χρυσό στεφάνι & πράσινα φύλλα", 6, "/templates/wreath.svg"),
+                (Guid.Parse("00000000-0000-0000-0000-000000000217"), "dusty", "Dusty Blue", "Απαλό μπλε & ροζ υδατογραφία", 7, "/templates/dusty.svg"),
+                (Guid.Parse("00000000-0000-0000-0000-000000000218"), "greengold", "Green & Gold", "Editorial Save the Date, πράσινο & χρυσό", 8, "/templates/greengold.svg"),
+                (Guid.Parse("00000000-0000-0000-0000-000000000219"), "geometric", "Geometric Floral", "Γεωμετρικό πλαίσιο & peony", 9, "/templates/geometric.svg"),
             };
 
             var rusticTemplate = null as InvitationTemplate;
@@ -338,6 +338,7 @@ public static class DatabaseSeeder
                 Description = "Χαρούμενη πρόσκληση βάπτισης",
                 EventType = EventType.Baptism,
                 Category = "classic",
+                PreviewImageUrl = "/templates/classic.svg",
                 DefaultThemeId = baptismTheme.Id,
                 SortOrder = 20
             };
@@ -349,6 +350,7 @@ public static class DatabaseSeeder
                 Description = "Εορταστική πρόσκληση γενεθλίων",
                 EventType = EventType.Party,
                 Category = "birthday",
+                PreviewImageUrl = "/templates/birthday.svg",
                 DefaultThemeId = modernTheme.Id,
                 SortOrder = 30
             };
@@ -819,16 +821,16 @@ public static class DatabaseSeeder
 
         var weddingStyles = new (Guid id, string category, string name, string description, int sort, string preview)[]
         {
-            (Guid.Parse("00000000-0000-0000-0000-000000000210"), "rustic", "Ρουστίκ", "Φυσικά υλικά, ξύλο & γήινα χρώματα", 0, "https://images.unsplash.com/photo-1519741497674-611481863552?w=900&h=700&fit=crop"),
-            (Guid.Parse("00000000-0000-0000-0000-000000000211"), "boho", "Boho Chic", "Αέρινα υφάσματα, pampas & ελεύθερο πνεύμα", 1, "https://images.unsplash.com/photo-1522673607200-164d1b6ce486?w=900&h=700&fit=crop"),
-            (Guid.Parse("00000000-0000-0000-0000-000000000212"), "minimal", "Minimal Chic", "Καθαρές γραμμές, λευκό & λιτή κομψότητα", 2, "https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?w=900&h=700&fit=crop"),
-            (Guid.Parse("00000000-0000-0000-0000-000000000213"), "vintage", "Vintage", "Δαντέλες, παστέλ & ρομαντική νοσταλγία", 3, "https://images.unsplash.com/photo-1556337137-c7de215dfa78?w=900&h=700&fit=crop"),
-            (Guid.Parse("00000000-0000-0000-0000-000000000214"), "elegant", "Κλασικό Elegant", "Μεγαλοπρεπής δεξίωση & επίσημο στυλ", 4, "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=900&h=700&fit=crop"),
-            (Guid.Parse("00000000-0000-0000-0000-000000000215"), "floral", "Floral Romance", "Τριαντάφυλλα, μπορντό & ρομαντικό script", 5, "https://images.unsplash.com/photo-1520854221256-1744189951c6?w=900&h=700&fit=crop"),
-            (Guid.Parse("00000000-0000-0000-0000-000000000216"), "wreath", "Botanical Wreath", "Χρυσό στεφάνι & πράσινα φύλλα", 6, "https://images.unsplash.com/photo-1460978812857-470ed1c77af0?w=900&h=700&fit=crop"),
-            (Guid.Parse("00000000-0000-0000-0000-000000000217"), "dusty", "Dusty Blue", "Απαλό μπλε & ροζ υδατογραφία", 7, "https://images.unsplash.com/photo-1529636798458-92182e662485?w=900&h=700&fit=crop"),
-            (Guid.Parse("00000000-0000-0000-0000-000000000218"), "greengold", "Green & Gold", "Editorial Save the Date, πράσινο & χρυσό", 8, "https://images.unsplash.com/photo-1511285560929-80b456fe9cab?w=900&h=700&fit=crop"),
-            (Guid.Parse("00000000-0000-0000-0000-000000000219"), "geometric", "Geometric Floral", "Γεωμετρικό πλαίσιο & peony", 9, "https://images.unsplash.com/photo-1606216794074-735e91aa2c92?w=900&h=700&fit=crop"),
+            (Guid.Parse("00000000-0000-0000-0000-000000000210"), "rustic", "Ρουστίκ", "Φυσικά υλικά, ξύλο & γήινα χρώματα", 0, "/templates/rustic.svg"),
+            (Guid.Parse("00000000-0000-0000-0000-000000000211"), "boho", "Boho Chic", "Αέρινα υφάσματα, pampas & ελεύθερο πνεύμα", 1, "/templates/boho.svg"),
+            (Guid.Parse("00000000-0000-0000-0000-000000000212"), "minimal", "Minimal Chic", "Καθαρές γραμμές, λευκό & λιτή κομψότητα", 2, "/templates/minimal.svg"),
+            (Guid.Parse("00000000-0000-0000-0000-000000000213"), "vintage", "Vintage", "Δαντέλες, παστέλ & ρομαντική νοσταλγία", 3, "/templates/vintage.svg"),
+            (Guid.Parse("00000000-0000-0000-0000-000000000214"), "elegant", "Κλασικό Elegant", "Μεγαλοπρεπής δεξίωση & επίσημο στυλ", 4, "/templates/elegant.svg"),
+            (Guid.Parse("00000000-0000-0000-0000-000000000215"), "floral", "Floral Romance", "Τριαντάφυλλα, μπορντό & ρομαντικό script", 5, "/templates/floral.svg"),
+            (Guid.Parse("00000000-0000-0000-0000-000000000216"), "wreath", "Botanical Wreath", "Χρυσό στεφάνι & πράσινα φύλλα", 6, "/templates/wreath.svg"),
+            (Guid.Parse("00000000-0000-0000-0000-000000000217"), "dusty", "Dusty Blue", "Απαλό μπλε & ροζ υδατογραφία", 7, "/templates/dusty.svg"),
+            (Guid.Parse("00000000-0000-0000-0000-000000000218"), "greengold", "Green & Gold", "Editorial Save the Date, πράσινο & χρυσό", 8, "/templates/greengold.svg"),
+            (Guid.Parse("00000000-0000-0000-0000-000000000219"), "geometric", "Geometric Floral", "Γεωμετρικό πλαίσιο & peony", 9, "/templates/geometric.svg"),
         };
 
         var sectionTypes = new[]
@@ -966,15 +968,23 @@ public static class DatabaseSeeder
 
         var baptismTemplate = await context.InvitationTemplates
             .FirstOrDefaultAsync(t => t.Id == Guid.Parse("00000000-0000-0000-0000-000000000202"));
-        if (baptismTemplate is not null && baptismTemplate.DefaultThemeId != baptismThemeId)
+        if (baptismTemplate is not null)
         {
-            baptismTemplate.DefaultThemeId = baptismThemeId;
+            if (baptismTemplate.DefaultThemeId != baptismThemeId)
+                baptismTemplate.DefaultThemeId = baptismThemeId;
+            baptismTemplate.PreviewImageUrl = "/templates/classic.svg";
             await context.SaveChangesAsync();
         }
 
         var birthdayId = Guid.Parse("00000000-0000-0000-0000-000000000203");
-        if (await context.InvitationTemplates.AnyAsync(t => t.Id == birthdayId || t.Category == "birthday"))
+        var existingBirthday = await context.InvitationTemplates
+            .FirstOrDefaultAsync(t => t.Id == birthdayId || t.Category == "birthday");
+        if (existingBirthday is not null)
+        {
+            existingBirthday.PreviewImageUrl = "/templates/birthday.svg";
+            await context.SaveChangesAsync();
             return;
+        }
 
         var modernTheme = await context.Themes.FirstOrDefaultAsync(t =>
             t.Id == Guid.Parse("00000000-0000-0000-0000-000000000102"));
@@ -989,6 +999,7 @@ public static class DatabaseSeeder
             Description = "Εορταστική πρόσκληση γενεθλίων",
             EventType = EventType.Party,
             Category = "birthday",
+            PreviewImageUrl = "/templates/birthday.svg",
             DefaultThemeId = modernTheme.Id,
             SortOrder = 0
         };

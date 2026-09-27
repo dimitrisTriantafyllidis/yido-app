@@ -66,7 +66,7 @@ export default function RegisterPage() {
     "h-12 w-full rounded-lg border border-[#E6DFD5] bg-white px-4 text-sm text-[#1F0F12] placeholder:text-[#6E5B60] outline-none focus:border-[#4A1221] focus:ring-1 focus:ring-[#4A1221]";
 
   return (
-    <div className="w-full max-w-[480px] rounded-2xl bg-white px-10 py-8 shadow-[0_8px_16px_rgba(18,28,23,0.05)]">
+    <div className="w-full max-w-[480px] rounded-2xl bg-white px-5 py-6 shadow-[0_8px_16px_rgba(18,28,23,0.05)] sm:px-10 sm:py-8">
       <div className="mb-6 flex flex-col items-center gap-3 text-center">
         <LandingLogo href="/" size="lg" />
         <div className="space-y-1">

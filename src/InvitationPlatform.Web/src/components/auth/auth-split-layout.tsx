@@ -16,7 +16,7 @@ export function AuthSplitLayout({
         />
         <div className="absolute inset-0 bg-[#4A1221]/18" aria-hidden />
       </div>
-      <div className="flex min-h-screen w-full flex-1 items-center justify-center p-8 md:p-16">
+      <div className="flex min-h-screen w-full flex-1 items-center justify-center p-5 sm:p-8 md:p-16">
         {children}
       </div>
     </div>
